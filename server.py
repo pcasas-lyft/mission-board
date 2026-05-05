@@ -15,6 +15,19 @@ _clients_lock = threading.Lock()
 # File I/O lock — prevents concurrent writes from corrupting tasks.json
 _file_lock = threading.Lock()
 
+# Regen WORKSTATUS.md + DONELOG.md in the background after any write
+def _regen_docs():
+    try:
+        subprocess.run(['python3', os.path.join(INSTALL_DIR, 'gen-status.py')],
+                       capture_output=True, timeout=15)
+        subprocess.run(['python3', os.path.join(INSTALL_DIR, 'gen-donelog.py')],
+                       capture_output=True, timeout=15)
+    except Exception:
+        pass
+
+def regen_docs_async():
+    threading.Thread(target=_regen_docs, daemon=True).start()
+
 
 def broadcast(msg):
     with _clients_lock:
@@ -212,6 +225,7 @@ class Handler(SimpleHTTPRequestHandler):
                     json.dump(tasks, f)
 
             broadcast('update')
+            regen_docs_async()
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
             self._cors(); self.end_headers()
@@ -259,6 +273,7 @@ class Handler(SimpleHTTPRequestHandler):
                     json.dump(tasks, f)
 
             broadcast('update')
+            regen_docs_async()
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
             self._cors()
@@ -413,6 +428,7 @@ class Handler(SimpleHTTPRequestHandler):
                     json.dump(tasks, f)
 
             broadcast('update')
+            regen_docs_async()
             self.send_response(201)
             self.send_header('Content-Type', 'application/json')
             self._cors()
@@ -439,6 +455,7 @@ class Handler(SimpleHTTPRequestHandler):
                 with open(TASKS_FILE, 'wb') as f:
                     f.write(body)
             broadcast('update')
+            regen_docs_async()
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
             self._cors()

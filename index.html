@@ -656,7 +656,12 @@
       </div>
       <div class="form-group">
         <label>PR / Branch</label>
-        <input type="text" id="taskPrLink" placeholder="https://github.com/..." />
+        <div style="display:flex;gap:6px;align-items:center">
+          <input type="text" id="taskPrLink" placeholder="https://github.com/..." style="flex:1" />
+          <a id="prLinkOpen" href="#" target="_blank" rel="noopener"
+             style="display:none;font-size:13px;color:var(--accent);padding:0 4px;text-decoration:none"
+             title="Open PR">↗</a>
+        </div>
       </div>
     </div>
 
@@ -1167,6 +1172,7 @@
     document.getElementById('taskStatus').value = task ? (task.status || 'todo') : 'todo';
     document.getElementById('taskPrLink').value = task ? (task.prLink || '') : '';
     document.getElementById('taskBlockedOn').value = task ? (task.blockedOn || '') : '';
+    updatePrLinkBtn();
     document.getElementById('deleteTaskBtn').style.display = task ? '' : 'none';
 
     // Jira key — load and fetch preview if set
@@ -1344,34 +1350,57 @@
     const jiraKey  = document.getElementById('taskJiraKey').value.trim().toUpperCase();
     const done     = status === 'done';
 
+    setSyncState('saving');
+
     if (editingId) {
       const idx = tasks.findIndex(t => t.id === editingId);
       if (idx !== -1) {
         const prev = tasks[idx];
-        // Roll current notes into history if they changed (keep last 3)
-        const history = prev.noteHistory ? [...prev.noteHistory] : [];
-        if (prev.notes && prev.notes.trim() && prev.notes.trim() !== notes.trim()) {
-          history.push({ text: prev.notes.trim(), savedAt: new Date().toISOString() });
-          if (history.length > 3) history.shift();
-        }
-        // Saving via UI clears the agent claim (human took over)
-        tasks[idx] = { ...prev, title, day: dayStr, priority, notes, ongoing: isOngoing, subtasks,
-                        status, done, prLink, blockedOn, jiraKey, log: modalLog,
-                        claimedBy: status === 'done' ? '' : prev.claimedBy,
-                        lastUpdated: new Date().toISOString() };
+        const patch = {
+          title, day: dayStr, priority, notes, ongoing: isOngoing, subtasks,
+          status, done, prLink, blockedOn, jiraKey, log: modalLog,
+          claimedBy: status === 'done' ? '' : prev.claimedBy,
+          lastUpdated: new Date().toISOString(),
+        };
+        // Optimistic local update
+        tasks[idx] = { ...prev, ...patch };
+        // PATCH just this task — safe against concurrent agent writes
+        fetch(`/tasks/${editingId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(patch),
+        }).then(() => setSyncState('saved')).catch(() => {
+          // Fall back to full save
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+          setSyncState('error');
+        });
       }
     } else {
-      tasks.push({
-        id: Date.now().toString(),
+      const newTask = {
         title, day: dayStr, priority, notes,
         ongoing: isOngoing, subtasks,
         status, done, prLink, blockedOn, jiraKey, log: modalLog,
         createdAt: new Date().toISOString(),
         lastUpdated: new Date().toISOString(),
+      };
+      fetch('/tasks/new', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newTask),
+      }).then(r => r.json()).then(data => {
+        newTask.id = data.id;
+        tasks.push(newTask);
+        setSyncState('saved');
+        renderBoard();
+      }).catch(() => {
+        newTask.id = Date.now().toString();
+        tasks.push(newTask);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+        setSyncState('error');
+        renderBoard();
       });
     }
 
-    saveTasks();
     closeModal();
     renderBoard();
   }
@@ -1406,6 +1435,17 @@
   });
 
   document.getElementById('taskStatus').addEventListener('change', updateBlockedOnVisibility);
+
+  // PR link open button — show when there's a URL, update href as you type
+  const prLinkInput = document.getElementById('taskPrLink');
+  const prLinkOpen  = document.getElementById('prLinkOpen');
+  function updatePrLinkBtn() {
+    const url = prLinkInput.value.trim();
+    const show = url.startsWith('http');
+    prLinkOpen.style.display = show ? '' : 'none';
+    if (show) prLinkOpen.href = url;
+  }
+  prLinkInput.addEventListener('input', updatePrLinkBtn);
 
   document.getElementById('logAddBtn').addEventListener('click', () => {
     const input = document.getElementById('logNewEntry');
