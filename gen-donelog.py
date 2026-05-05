@@ -108,6 +108,17 @@ def main():
     jira_base = load_jira_base()
     all_tasks = load_json(TASKS_FILE) + load_json(ARCHIVE_FILE)
 
+    # Deduplicate by id (a task may appear in both files during a partial archive run)
+    _seen_ids: set = set()
+    _deduped = []
+    for t in all_tasks:
+        tid = t.get('id')
+        if tid and tid in _seen_ids:
+            continue
+        _seen_ids.add(tid)
+        _deduped.append(t)
+    all_tasks = _deduped
+
     done = [t for t in all_tasks if t.get('done') or t.get('status') == 'done']
     if not done:
         # Write an empty-ish file rather than leaving a stale one

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import json, os, threading, queue, subprocess, getpass
+import json, os, re, threading, queue, subprocess, getpass, uuid
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from socketserver import ThreadingMixIn
 
@@ -89,6 +89,12 @@ class Handler(SimpleHTTPRequestHandler):
 
         elif self.path.startswith('/jira/'):
             key = self.path[len('/jira/'):].upper()
+            if not re.match(r'^[A-Z]+-\d+$', key):
+                self.send_response(400)
+                self.send_header('Content-Type', 'application/json')
+                self._cors(); self.end_headers()
+                self.wfile.write(json.dumps({'error': 'Invalid Jira key format'}).encode())
+                return
             # Load config
             cfg = {}
             if os.path.exists(JIRA_CONFIG_FILE):
@@ -184,7 +190,10 @@ class Handler(SimpleHTTPRequestHandler):
         # PATCH /tasks/<id>/log — append a log entry atomically
         if self.path.startswith('/tasks/') and self.path.endswith('/log'):
             task_id = self.path[len('/tasks/'):-len('/log')]
-            length = int(self.headers.get('Content-Length', 0))
+            if not re.match(r'^[a-zA-Z0-9_-]+$', task_id):
+                self.send_response(400); self._cors(); self.end_headers()
+                self.wfile.write(b'{"error":"invalid task id"}'); return
+            length = int(self.headers.get('Content-Length') or 0)
             body = self.rfile.read(length)
             try:
                 payload = json.loads(body)
@@ -235,7 +244,10 @@ class Handler(SimpleHTTPRequestHandler):
         # PATCH /tasks/<id>  — merge-update a single task
         if self.path.startswith('/tasks/'):
             task_id = self.path[len('/tasks/'):]
-            length = int(self.headers.get('Content-Length', 0))
+            if not re.match(r'^[a-zA-Z0-9_-]+$', task_id):
+                self.send_response(400); self._cors(); self.end_headers()
+                self.wfile.write(b'{"error":"invalid task id"}'); return
+            length = int(self.headers.get('Content-Length') or 0)
             body = self.rfile.read(length)
 
             try:
@@ -283,7 +295,7 @@ class Handler(SimpleHTTPRequestHandler):
     def do_POST(self):
         # POST /jira-config — save Jira token + base URL
         if self.path == '/jira-config':
-            length = int(self.headers.get('Content-Length', 0))
+            length = int(self.headers.get('Content-Length') or 0)
             body = self.rfile.read(length)
             try:
                 payload = json.loads(body)
@@ -378,7 +390,7 @@ class Handler(SimpleHTTPRequestHandler):
 
         # POST /tasks/new — append a single new task atomically
         if self.path == '/tasks/new':
-            length = int(self.headers.get('Content-Length', 0))
+            length = int(self.headers.get('Content-Length') or 0)
             body = self.rfile.read(length)
 
             try:
@@ -399,9 +411,8 @@ class Handler(SimpleHTTPRequestHandler):
                 self.wfile.write(b'{"error":"task must be an object with a title"}')
                 return
 
-            import time
             # Fill in defaults so the UI always gets a well-formed task
-            new_task.setdefault('id', str(int(time.time() * 1000)))
+            new_task.setdefault('id', uuid.uuid4().hex[:12])
             new_task.setdefault('status', 'todo')
             new_task.setdefault('done', False)
             new_task.setdefault('ongoing', False)
@@ -437,7 +448,7 @@ class Handler(SimpleHTTPRequestHandler):
             return
 
         if self.path == '/tasks':
-            length = int(self.headers.get('Content-Length', 0))
+            length = int(self.headers.get('Content-Length') or 0)
             body = self.rfile.read(length)
 
             # Validate JSON before touching the file
@@ -477,6 +488,6 @@ class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
 
 if __name__ == '__main__':
     port = 3456
-    server = ThreadedHTTPServer(('', port), Handler)
+    server = ThreadedHTTPServer(('127.0.0.1', port), Handler)
     print(f'Todo tracker → http://localhost:{port}')
     server.serve_forever()

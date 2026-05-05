@@ -1122,11 +1122,16 @@
       meta += `<span class="subtask-progress${allDone ? ' all-done' : ''}">${done}/${total} done</span>`;
     }
     if (task.prLink && task.prLink.trim()) {
-      meta += `<a class="pr-link" href="${escHtml(task.prLink)}" target="_blank" rel="noopener" title="${escHtml(task.prLink)}">🔗 PR</a>`;
+      const safeUrl = /^https?:\/\//i.test(task.prLink.trim()) ? task.prLink.trim() : null;
+      if (safeUrl) meta += `<a class="pr-link" href="${escHtml(safeUrl)}" target="_blank" rel="noopener" title="${escHtml(safeUrl)}">🔗 PR</a>`;
     }
     if (task.jiraKey && task.jiraKey.trim()) {
-      const jiraBase = window._jiraBaseUrl || '';
-      meta += `<a class="jira-badge" href="${jiraBase}/browse/${escHtml(task.jiraKey)}" target="_blank" rel="noopener">${escHtml(task.jiraKey)}</a>`;
+      const jiraBase = /^https?:\/\//i.test(window._jiraBaseUrl || '') ? window._jiraBaseUrl : '';
+      if (jiraBase) {
+        meta += `<a class="jira-badge" href="${escHtml(jiraBase)}/browse/${escHtml(task.jiraKey)}" target="_blank" rel="noopener">${escHtml(task.jiraKey)}</a>`;
+      } else {
+        meta += `<span class="jira-badge">${escHtml(task.jiraKey)}</span>`;
+      }
     }
     if (task.claimedBy && task.claimedBy.trim()) {
       meta += `<span class="claimed-badge" title="Claimed by ${escHtml(task.claimedBy)}">🔒</span>`;
@@ -1368,30 +1373,33 @@
       }
     } else {
       const newTask = {
+        id: `tmp-${Date.now()}`,   // optimistic id — replaced by server response
         title, day: dayStr, priority, notes,
         ongoing: isOngoing, subtasks,
         status, done, prLink, blockedOn, jiraKey, log: modalLog,
         createdAt: new Date().toISOString(),
         lastUpdated: new Date().toISOString(),
       };
+      tasks.push(newTask);    // show it immediately
+      closeModal();
+      renderBoard();
       fetch('/tasks/new', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newTask),
       }).then(r => r.json()).then(data => {
-        newTask.id = data.id;
-        tasks.push(newTask);
+        newTask.id = data.id;  // swap tmp id for the real one in-place
         setSyncState('saved');
-        renderBoard();
+        renderBoard();         // re-render with real id so clicks work
       }).catch(() => {
-        newTask.id = Date.now().toString();
-        tasks.push(newTask);
+        // keep the tmp id — task is visible, just not server-confirmed
         localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
         setSyncState('error');
-        renderBoard();
       });
+      return; // early return — closeModal/renderBoard already called above
     }
 
+    // Edit path falls through here
     closeModal();
     renderBoard();
   }
@@ -1489,7 +1497,13 @@
       if (_sseIgnoreNext) { _sseIgnoreNext = false; return; }
       loadTasks();
     };
-    es.onerror = () => { es.close(); setTimeout(connectSSE, 3000); };
+    es.onerror = () => {
+      es.close();
+      setTimeout(() => {
+        connectSSE();
+        loadTasks(); // catch any events missed during the gap
+      }, 3000);
+    };
   }
   connectSSE();
 
@@ -1523,7 +1537,8 @@
         preview.innerHTML = `<span style="color:var(--red)">${escHtml(data.error || 'Error')}</span>`;
         return;
       }
-      const dotClass = { yellow: 'yellow', green: 'green', 'blue-grey': 'blue-grey' }[data.statusCategory] || 'blue-grey';
+      const _dotMap = { yellow: 'yellow', green: 'green', 'blue-grey': 'blue-grey' };
+      const dotClass = _dotMap[data.statusCategory] || 'blue-grey';
       const assigneeHtml = data.assignee ? `<span style="color:var(--text-muted)">· ${escHtml(data.assignee)}</span>` : '';
       preview.innerHTML = `
         <span class="jira-status-dot ${dotClass}"></span>
