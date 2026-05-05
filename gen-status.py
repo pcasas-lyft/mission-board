@@ -120,12 +120,6 @@ def main():
             lines.append(task_line(t))
         lines.append("")
 
-    if done_tasks:
-        lines += ["## ✅ Done", ""]
-        for t in done_tasks:
-            lines.append(f"- ~~{t['title']}~~")
-        lines.append("")
-
     lines += [
         "---",
         "",
@@ -140,6 +134,8 @@ def main():
         "| `/tasks/<id>` | PATCH | Update a single task ← **use this** |",
         "",
         "**Status values:** `todo` · `in-progress` · `in-review` · `blocked` · `done`",
+        "",
+        "> Completed tasks are in **DONELOG.md** (same directory). Use `/done` to query what's been finished.",
         "",
         "**When you finish work on a task, PATCH it with:**",
         "```json",

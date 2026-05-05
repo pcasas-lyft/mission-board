@@ -44,15 +44,24 @@ else
   echo "✓ tasks.json already exists — kept"
 fi
 
-# ── 3. Generate WORKSTATUS.md ────────────────────────────────────────────────
-"$PYTHON3" "$INSTALL_DIR/gen-status.py" 2>/dev/null && echo "✓ Generated WORKSTATUS.md" || echo "⚠  Could not generate WORKSTATUS.md (server not needed for this)"
+# ── 3. Generate WORKSTATUS.md and DONELOG.md ─────────────────────────────────
+"$PYTHON3" "$INSTALL_DIR/gen-status.py"  2>/dev/null && echo "✓ Generated WORKSTATUS.md" || true
+"$PYTHON3" "$INSTALL_DIR/gen-donelog.py" 2>/dev/null && echo "✓ Generated DONELOG.md"    || true
 
-# ── 4. Install /status skill ─────────────────────────────────────────────────
+# ── 4. Install /status and /done skills ─────────────────────────────────────
+DONELOG_PATH="$PARENT_DIR/DONELOG.md"
+
 mkdir -p "$HOME/.claude/skills/status"
 sed -e "s|__WORKSTATUS_PATH__|$WORKSTATUS_PATH|g" \
     "$INSTALL_DIR/templates/status-skill.md" \
     > "$HOME/.claude/skills/status/SKILL.md"
 echo "✓ Installed /status skill → $HOME/.claude/skills/status/SKILL.md"
+
+mkdir -p "$HOME/.claude/skills/done"
+sed -e "s|__DONELOG_PATH__|$DONELOG_PATH|g" \
+    "$INSTALL_DIR/templates/done-skill.md" \
+    > "$HOME/.claude/skills/done/SKILL.md"
+echo "✓ Installed /done skill   → $HOME/.claude/skills/done/SKILL.md"
 
 # ── 5. Merge Claude Code hooks ───────────────────────────────────────────────
 "$PYTHON3" "$INSTALL_DIR/install-hooks.py" "$INSTALL_DIR" "$WORKSTATUS_PATH"

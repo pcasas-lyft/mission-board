@@ -5,6 +5,7 @@ jira-config.json
 
 # Auto-generated
 WORKSTATUS.md
+DONELOG.md
 server.log
 *.log
 

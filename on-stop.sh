@@ -9,8 +9,9 @@ DIR="$(dirname "$0")"
 # 1. Archive done tasks older than 3 days
 python3 "$DIR/archive-tasks.py" 2>/dev/null
 
-# 2. Regenerate WORKSTATUS.md
+# 2. Regenerate WORKSTATUS.md and DONELOG.md
 python3 "$DIR/gen-status.py" 2>/dev/null
+python3 "$DIR/gen-donelog.py" 2>/dev/null
 
 # 3. Build notification scoped to this agent's branch/task
 BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
