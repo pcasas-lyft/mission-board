@@ -8,7 +8,7 @@ Branch naming convention:
   feat/<task-id>-description   e.g. feat/t4-tcs-mcp     → task id: t4
   fix/<task-id>-description    e.g. fix/1746001234-bug   → task id: 1746001234
 
-Fallback for user-prefixed branches (e.g. pcasas/promo-banner-ua-migration):
+Fallback for user-prefixed branches (e.g. alice/promo-banner-redesign):
   Slug-matches branch description against task titles.
 
 If the branch doesn't match or the task isn't found, exits silently.
@@ -95,7 +95,7 @@ def main():
     if not task:
         task = next((t for t in tasks if t.get('claimedBy') == branch), None)
 
-    # Strategy 3: slug match for user-prefixed branches (pcasas/*, alice/*, etc.)
+    # Strategy 3: slug match for user-prefixed branches (alice/*, bob/*, etc.)
     if not task:
         task = find_task_by_slug(tasks, branch)
 

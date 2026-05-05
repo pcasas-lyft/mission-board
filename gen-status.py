@@ -6,9 +6,19 @@ Run directly or via the Stop hook / fswatch watcher.
 import json, os, sys
 from datetime import datetime, timezone
 
-TASKS_FILE  = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tasks.json')
-STATUS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'WORKSTATUS.md')
-STATUS_FILE = os.path.normpath(STATUS_FILE)
+INSTALL_DIR   = os.path.dirname(os.path.abspath(__file__))
+TASKS_FILE    = os.path.join(INSTALL_DIR, 'tasks.json')
+JIRA_CFG_FILE = os.path.join(INSTALL_DIR, 'jira-config.json')
+STATUS_FILE   = os.path.normpath(os.path.join(INSTALL_DIR, '..', 'WORKSTATUS.md'))
+
+def load_jira_base():
+    if not os.path.exists(JIRA_CFG_FILE):
+        return ''
+    try:
+        with open(JIRA_CFG_FILE) as f:
+            return json.load(f).get('baseUrl', '')
+    except Exception:
+        return ''
 
 def load_tasks():
     if not os.path.exists(TASKS_FILE):
@@ -30,12 +40,15 @@ def fmt_log_date(iso):
     except Exception:
         return ''
 
-def task_line(t, show_day=False):
+def task_line(t, show_day=False, jira_base=''):
     parts = [f"**{t['title']}**"]
     if show_day and t.get('day') and t['day'] != 'unscheduled':
         parts.append(f"— {fmt_date(t['day'] + 'T00:00:00')}")
     if t.get('jiraKey'):
-        parts.append(f"· [{t['jiraKey']}](https://jira.lyft.net/browse/{t['jiraKey']})")
+        if jira_base:
+            parts.append(f"· [{t['jiraKey']}]({jira_base}/browse/{t['jiraKey']})")
+        else:
+            parts.append(f"· `{t['jiraKey']}`")
     if t.get('prLink'):
         parts.append(f"· [PR]({t['prLink']})")
     if t.get('claimedBy'):
@@ -65,6 +78,7 @@ def task_line(t, show_day=False):
 
 def main():
     tasks = load_tasks()
+    jira_base = load_jira_base()
     now = datetime.now().strftime('%a %b %-d, %Y at %-I:%M %p')
 
     not_done     = [t for t in tasks if not t.get('done') and t.get('status') != 'done']
@@ -95,43 +109,43 @@ def main():
     if active_now:
         lines += ["## 🔴 Active Now", ""]
         for t in active_now:
-            lines.append(task_line(t))
+            lines.append(task_line(t, jira_base=jira_base))
         lines.append("")
 
     if ongoing_idle:
         lines += ["## 🟣 This Week (Ongoing)", ""]
         for t in ongoing_idle:
-            lines.append(task_line(t))
+            lines.append(task_line(t, jira_base=jira_base))
         lines.append("")
 
     if blocked:
         lines += ["## ⛔ Blocked", ""]
         for t in blocked:
-            lines.append(task_line(t))
+            lines.append(task_line(t, jira_base=jira_base))
         lines.append("")
 
     if in_review:
         lines += ["## 🔄 In Review", ""]
         for t in in_review:
-            lines.append(task_line(t))
+            lines.append(task_line(t, jira_base=jira_base))
         lines.append("")
 
     if in_progress:
         lines += ["## 🟡 In Progress", ""]
         for t in in_progress:
-            lines.append(task_line(t))
+            lines.append(task_line(t, jira_base=jira_base))
         lines.append("")
 
     if scheduled:
         lines += ["## 📅 Scheduled This Week", ""]
         for t in sorted(scheduled, key=lambda t: t.get('day', '')):
-            lines.append(task_line(t, show_day=True))
+            lines.append(task_line(t, show_day=True, jira_base=jira_base))
         lines.append("")
 
     if backlog:
         lines += ["## 📋 Backlog / Unscheduled", ""]
         for t in backlog:
-            lines.append(task_line(t))
+            lines.append(task_line(t, jira_base=jira_base))
         lines.append("")
 
     lines += [

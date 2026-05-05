@@ -6,7 +6,7 @@ from socketserver import ThreadingMixIn
 INSTALL_DIR       = os.path.dirname(os.path.abspath(__file__))
 TASKS_FILE        = os.path.join(INSTALL_DIR, 'tasks.json')
 JIRA_CONFIG_FILE  = os.path.join(INSTALL_DIR, 'jira-config.json')
-JIRA_DEFAULT_URL  = 'https://jira.lyft.net'
+JIRA_DEFAULT_URL  = ''
 
 # SSE: list of per-client queues
 _clients = []

@@ -8,10 +8,20 @@ Run directly or via on-stop.sh.
 import json, os, sys
 from datetime import datetime, timezone, timedelta
 
-INSTALL_DIR  = os.path.dirname(os.path.abspath(__file__))
-TASKS_FILE   = os.path.join(INSTALL_DIR, 'tasks.json')
-ARCHIVE_FILE = os.path.join(INSTALL_DIR, 'tasks-archive.json')
-DONELOG_FILE = os.path.normpath(os.path.join(INSTALL_DIR, '..', 'DONELOG.md'))
+INSTALL_DIR   = os.path.dirname(os.path.abspath(__file__))
+TASKS_FILE    = os.path.join(INSTALL_DIR, 'tasks.json')
+ARCHIVE_FILE  = os.path.join(INSTALL_DIR, 'tasks-archive.json')
+JIRA_CFG_FILE = os.path.join(INSTALL_DIR, 'jira-config.json')
+DONELOG_FILE  = os.path.normpath(os.path.join(INSTALL_DIR, '..', 'DONELOG.md'))
+
+def load_jira_base():
+    if not os.path.exists(JIRA_CFG_FILE):
+        return ''
+    try:
+        with open(JIRA_CFG_FILE) as f:
+            return json.load(f).get('baseUrl', '')
+    except Exception:
+        return ''
 
 
 def load_json(path):
@@ -56,12 +66,15 @@ def fmt_log_date(iso):
     except Exception:
         return ''
 
-def task_line(t, dt):
+def task_line(t, dt, jira_base=''):
     # Header line
     header = f"~~**{t['title']}**~~"
     meta = [f"Completed {fmt_date(dt)}"]
     if t.get('jiraKey'):
-        meta.append(f"[{t['jiraKey']}](https://jira.lyft.net/browse/{t['jiraKey']})")
+        if jira_base:
+            meta.append(f"[{t['jiraKey']}]({jira_base}/browse/{t['jiraKey']})")
+        else:
+            meta.append(f"`{t['jiraKey']}`")
     if t.get('prLink'):
         meta.append(f"[PR]({t['prLink']})")
     header += '  · ' + ' · '.join(meta)
@@ -86,6 +99,7 @@ def task_line(t, dt):
 
 
 def main():
+    jira_base = load_jira_base()
     all_tasks = load_json(TASKS_FILE) + load_json(ARCHIVE_FILE)
 
     done = [t for t in all_tasks if t.get('done') or t.get('status') == 'done']
@@ -119,7 +133,7 @@ def main():
         lines.append(f"## {label}")
         lines.append("")
         for t, dt in tasks:
-            lines.append(task_line(t, dt))
+            lines.append(task_line(t, dt, jira_base=jira_base))
         lines.append("")
 
     with open(DONELOG_FILE, 'w') as f:

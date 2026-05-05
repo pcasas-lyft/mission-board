@@ -570,14 +570,12 @@
   <div class="jira-modal">
     <h2>Jira Setup</h2>
     <p class="jira-subtitle">
-      Generate a token at
-      <a href="https://jira.lyft.net/secure/ViewProfile.jspa?selectedTab=com.atlassian.pats.pats-plugin:jira-user-personal-access-tokens" target="_blank" rel="noopener">
-        jira.lyft.net → Profile → Personal Access Tokens
-      </a>
+      Generate a token at your Jira instance:
+      <strong>Profile → Personal Access Tokens</strong>
     </p>
     <div class="form-group">
       <label>Base URL</label>
-      <input type="text" id="jiraBaseUrl" value="https://jira.lyft.net" />
+      <input type="text" id="jiraBaseUrl" placeholder="https://jira.yourcompany.com" />
     </div>
     <div class="form-group">
       <label>Personal Access Token</label>
@@ -711,18 +709,11 @@
   const STORAGE_KEY = 'weekly-todos-v2';
 
   const INITIAL_TASKS = [
-    { id: 't1', title: 'Subscriptions work',          ongoing: true,  day: 'unscheduled', priority: 'none', notes: '• Follow up with Jeorge MR for comms platform work', subtasks: [], done: false, createdAt: '2026-04-27T00:00:00.000Z' },
-    { id: 't0', title: 'Android comms work',          ongoing: true,  day: 'unscheduled', priority: 'high', notes: 'In progress — moved up in priority', subtasks: [], done: false, createdAt: '2026-04-27T00:00:00.000Z' },
-    { id: 't2', title: 'Opt-in screen',               ongoing: true,  day: 'unscheduled', priority: 'none', notes: '', subtasks: [], done: false, createdAt: '2026-04-27T00:00:00.000Z' },
-    { id: 't3', title: 'Rewards VR header',            ongoing: false, day: 'unscheduled', priority: 'none', notes: '• Check with Zoe the assets are uploaded', subtasks: [], done: false, createdAt: '2026-04-27T00:00:00.000Z' },
-    { id: 't4', title: 'TCS MCP Experiment setup exploration', ongoing: false, day: 'unscheduled', priority: 'none', notes: '', subtasks: [{ id: 'st4a', text: 'Connect with Shaina about TCS MCP', done: false }], done: false, createdAt: '2026-04-27T00:00:00.000Z' },
-    { id: 't5', title: 'FFs to killswitches for Brooke', ongoing: false, day: '2026-04-28', priority: 'none', notes: 'Due in May', subtasks: [{ id: 'st5a', text: 'Review spreadsheet', done: false }], done: false, createdAt: '2026-04-27T00:00:00.000Z' },
-    { id: 't6', title: 'Coverage area map cleanup',   ongoing: false, day: '2026-04-28', priority: 'none', notes: '', subtasks: [], done: false, createdAt: '2026-04-27T00:00:00.000Z' },
-    { id: 't7', title: 'Hao and profile badges',      ongoing: false, day: 'unscheduled', priority: 'none', notes: '', subtasks: [{ id: 'st7a', text: 'Pending rollout to 100%', done: false }], done: false, createdAt: '2026-04-27T00:00:00.000Z' },
-    { id: 't8', title: 'Profile identity menu banner', ongoing: false, day: '2026-04-27', priority: 'none', notes: '', subtasks: [{ id: 'st8a', text: 'Get approval on PR', done: false }, { id: 'st8b', text: 'Rollout', done: false }], done: false, createdAt: '2026-04-27T00:00:00.000Z' },
-    { id: 't9', title: 'Snapshot tests merge',        ongoing: false, day: '2026-04-27', priority: 'none', notes: 'Merge 1 today', subtasks: [{ id: 'st9a', text: 'PR 1', done: false }, { id: 'st9b', text: 'PR 2', done: false }], done: false, createdAt: '2026-04-27T00:00:00.000Z' },
-    { id: 't10',title: 'Schedule a call with Uriel',  ongoing: false, day: '2026-04-27', priority: 'none', notes: '', subtasks: [], done: false, createdAt: '2026-04-27T00:00:00.000Z' },
-    { id: 't11',title: 'Summarize your achievements for Q1', ongoing: false, day: 'unscheduled', priority: 'none', notes: '', subtasks: [], done: false, createdAt: '2026-04-27T00:00:00.000Z' },
+    { id: 't1', title: 'Refactor auth module',        ongoing: true,  day: 'unscheduled', priority: 'high', notes: 'In progress — unblocked after design review', subtasks: [], done: false, createdAt: '2026-04-27T00:00:00.000Z' },
+    { id: 't2', title: 'Dark mode polish',             ongoing: true,  day: 'unscheduled', priority: 'none', notes: '', subtasks: [], done: false, createdAt: '2026-04-27T00:00:00.000Z' },
+    { id: 't3', title: 'API rate limiting',            ongoing: false, day: 'unscheduled', priority: 'none', notes: '', subtasks: [{ id: 'st3a', text: 'Research token bucket approach', done: false }], done: false, createdAt: '2026-04-27T00:00:00.000Z' },
+    { id: 't4', title: 'Write onboarding docs',        ongoing: false, day: 'unscheduled', priority: 'none', notes: '', subtasks: [], done: false, createdAt: '2026-04-27T00:00:00.000Z' },
+    { id: 't5', title: 'Fix flaky E2E tests',          ongoing: false, day: 'unscheduled', priority: 'none', notes: '', subtasks: [{ id: 'st5a', text: 'Identify root cause', done: false }, { id: 'st5b', text: 'Open PR with fix', done: false }], done: false, createdAt: '2026-04-27T00:00:00.000Z' },
   ];
 
   let tasks = [];
@@ -1134,7 +1125,7 @@
       meta += `<a class="pr-link" href="${escHtml(task.prLink)}" target="_blank" rel="noopener" title="${escHtml(task.prLink)}">🔗 PR</a>`;
     }
     if (task.jiraKey && task.jiraKey.trim()) {
-      const jiraBase = window._jiraBaseUrl || 'https://jira.lyft.net';
+      const jiraBase = window._jiraBaseUrl || '';
       meta += `<a class="jira-badge" href="${jiraBase}/browse/${escHtml(task.jiraKey)}" target="_blank" rel="noopener">${escHtml(task.jiraKey)}</a>`;
     }
     if (task.claimedBy && task.claimedBy.trim()) {
@@ -1505,15 +1496,15 @@
   loadTasks();
 
   // ── Jira integration ──────────────────────────────────────────────────────
-  window._jiraBaseUrl = 'https://jira.lyft.net';
+  window._jiraBaseUrl = '';
 
   async function loadJiraConfig() {
     try {
       const res = await fetch('/jira-config');
       const data = await res.json();
-      window._jiraBaseUrl = data.baseUrl || 'https://jira.lyft.net';
+      window._jiraBaseUrl = data.baseUrl || '';
       document.getElementById('jiraDot').classList.toggle('on', data.configured);
-      document.getElementById('jiraBaseUrl').value = data.baseUrl || 'https://jira.lyft.net';
+      document.getElementById('jiraBaseUrl').value = data.baseUrl || '';
     } catch (_) {}
   }
   loadJiraConfig();
