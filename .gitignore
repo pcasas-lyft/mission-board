@@ -1,0 +1,16 @@
+# Personal data — never committed
+tasks.json
+tasks-archive.json
+
+# Auto-generated
+WORKSTATUS.md
+server.log
+*.log
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# macOS
+.DS_Store

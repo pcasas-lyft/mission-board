@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>__PLIST_LABEL__</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>__PYTHON3__</string>
+        <string>__INSTALL_DIR__/server.py</string>
+    </array>
+
+    <!-- Restart automatically if it crashes -->
+    <key>KeepAlive</key>
+    <true/>
+
+    <!-- Start on login -->
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- Log stdout/stderr for debugging -->
+    <key>StandardOutPath</key>
+    <string>__INSTALL_DIR__/server.log</string>
+    <key>StandardErrorPath</key>
+    <string>__INSTALL_DIR__/server.log</string>
+
+    <key>WorkingDirectory</key>
+    <string>__INSTALL_DIR__</string>
+</dict>
+</plist>
