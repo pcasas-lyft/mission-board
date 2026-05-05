@@ -395,6 +395,38 @@
     .btn-delete:hover { background: rgba(248,113,113,0.22); }
 
     @media (max-width: 600px) { .board { grid-template-columns: repeat(2, 1fr) !important; } }
+
+    /* ── Update modal ── */
+    .update-btn {
+      background: var(--surface2); border: 1px solid var(--border);
+      color: var(--text-muted); border-radius: 7px; cursor: pointer;
+      font-size: 14px; padding: 6px 10px; transition: background 0.15s, color 0.15s;
+      line-height: 1;
+    }
+    .update-btn:hover { background: var(--border); color: var(--text); }
+    .update-btn.spinning { animation: spin 1s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .update-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.65); z-index: 200;
+      align-items: center; justify-content: center;
+    }
+    .update-overlay.open { display: flex; }
+    .update-modal {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 14px; width: 460px; max-width: 95vw;
+      box-shadow: var(--shadow); padding: 24px;
+    }
+    .update-modal h2 { font-size: 16px; font-weight: 700; margin-bottom: 14px; }
+    .update-output {
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 8px; padding: 12px 14px;
+      font-family: monospace; font-size: 12px; color: var(--text-muted);
+      white-space: pre-wrap; word-break: break-all;
+      max-height: 180px; overflow-y: auto; margin-bottom: 16px;
+    }
+    .update-actions { display: flex; gap: 8px; justify-content: flex-end; }
   </style>
 </head>
 <body>
@@ -409,9 +441,21 @@
   </div>
   <div style="display:flex;align-items:center;gap:10px;">
     <div class="sync-dot" id="syncDot" title="Sync status"></div>
+    <button class="update-btn" id="updateBtn" title="Pull latest updates from GitHub">↑</button>
     <button class="add-btn" id="openAddModal">+ New Task</button>
   </div>
 </header>
+
+<div class="update-overlay" id="updateOverlay">
+  <div class="update-modal">
+    <h2 id="updateTitle">Checking for updates…</h2>
+    <div class="update-output" id="updateOutput"></div>
+    <div class="update-actions">
+      <button class="btn-cancel" id="updateRestartBtn" style="display:none">Restart Server</button>
+      <button class="btn-cancel" id="updateCloseBtn">Close</button>
+    </div>
+  </div>
+</div>
 
 <div class="ongoing-band" id="ongoingBand" style="display:none">
   <div class="ongoing-band-header">
@@ -1227,6 +1271,66 @@
   connectSSE();
 
   loadTasks();
+
+  // ── Update button ──────────────────────────────────────────────────────────
+  const updateBtn      = document.getElementById('updateBtn');
+  const updateOverlay  = document.getElementById('updateOverlay');
+  const updateTitle    = document.getElementById('updateTitle');
+  const updateOutput   = document.getElementById('updateOutput');
+  const updateCloseBtn = document.getElementById('updateCloseBtn');
+  const updateRestartBtn = document.getElementById('updateRestartBtn');
+
+  updateBtn.addEventListener('click', async () => {
+    updateTitle.textContent = 'Checking for updates…';
+    updateOutput.textContent = '';
+    updateRestartBtn.style.display = 'none';
+    updateOverlay.classList.add('open');
+    updateBtn.classList.add('spinning');
+
+    try {
+      const res  = await fetch('/update', { method: 'POST' });
+      const data = await res.json();
+
+      updateBtn.classList.remove('spinning');
+      updateOutput.textContent = data.output || '(no output)';
+
+      if (!data.ok) {
+        updateTitle.textContent = '⚠ Update failed';
+      } else if (!data.changed) {
+        updateTitle.textContent = '✓ Already up to date';
+      } else if (data.server_changed) {
+        updateTitle.textContent = '✓ Updated — restart required';
+        updateRestartBtn.style.display = '';
+      } else {
+        updateTitle.textContent = '✓ Updated';
+        // Reload tasks to pick up any UI changes
+        setTimeout(loadTasks, 300);
+      }
+    } catch (e) {
+      updateBtn.classList.remove('spinning');
+      updateTitle.textContent = '⚠ Could not reach server';
+      updateOutput.textContent = String(e);
+    }
+  });
+
+  updateCloseBtn.addEventListener('click', () => updateOverlay.classList.remove('open'));
+  updateOverlay.addEventListener('click', e => { if (e.target === updateOverlay) updateOverlay.classList.remove('open'); });
+
+  updateRestartBtn.addEventListener('click', async () => {
+    updateRestartBtn.disabled = true;
+    updateRestartBtn.textContent = 'Restarting…';
+    try {
+      await fetch('/restart', { method: 'POST' });
+      updateTitle.textContent = '↺ Restarting server…';
+      updateOutput.textContent = 'Page will reload in a few seconds.';
+      setTimeout(() => location.reload(), 4000);
+    } catch (_) {
+      // Expected — server went away mid-response
+      updateTitle.textContent = '↺ Restarting…';
+      updateOutput.textContent = 'Page will reload in a few seconds.';
+      setTimeout(() => location.reload(), 4000);
+    }
+  });
 </script>
 </body>
 </html>

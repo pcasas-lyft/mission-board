@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-import json, os, threading, queue
+import json, os, threading, queue, subprocess, getpass
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from socketserver import ThreadingMixIn
 
-TASKS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tasks.json')
+INSTALL_DIR = os.path.dirname(os.path.abspath(__file__))
+TASKS_FILE  = os.path.join(INSTALL_DIR, 'tasks.json')
 
 # SSE: list of per-client queues
 _clients = []
@@ -133,6 +134,67 @@ class Handler(SimpleHTTPRequestHandler):
             self.wfile.write(b'{"ok":true}')
 
     def do_POST(self):
+        # POST /update — git pull and report what changed
+        if self.path == '/update':
+            try:
+                result = subprocess.run(
+                    ['git', '-C', INSTALL_DIR, 'pull'],
+                    capture_output=True, text=True, timeout=30
+                )
+                output = (result.stdout + result.stderr).strip()
+                already_current = 'Already up to date' in output
+                changed = result.returncode == 0 and not already_current
+                # Any .py or .sh file change means the server should restart
+                server_changed = changed and any(
+                    name in output for name in [
+                        'server.py', 'install-hooks.py', 'gen-status.py',
+                        'archive-tasks.py', 'notif-summary.py',
+                        'auto-claim-task.py', 'auto-unclaim-task.py',
+                    ]
+                )
+                resp = json.dumps({
+                    'ok': result.returncode == 0,
+                    'output': output,
+                    'changed': changed,
+                    'server_changed': server_changed,
+                })
+            except Exception as e:
+                resp = json.dumps({'ok': False, 'output': str(e), 'changed': False, 'server_changed': False})
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self._cors()
+            self.end_headers()
+            self.wfile.write(resp.encode())
+            return
+
+        # POST /restart — reload the launchd agent (macOS only)
+        if self.path == '/restart':
+            username = getpass.getuser()
+            plist = os.path.expanduser(f'~/Library/LaunchAgents/com.{username}.todo-tracker.plist')
+            if not os.path.exists(plist):
+                resp = json.dumps({'ok': False, 'output': 'launchd agent not found — restart the server manually'})
+                self.send_response(404)
+                self.send_header('Content-Type', 'application/json')
+                self._cors()
+                self.end_headers()
+                self.wfile.write(resp.encode())
+                return
+
+            def _restart():
+                import time
+                time.sleep(1.2)  # give the HTTP response time to land
+                subprocess.run(['launchctl', 'unload', plist], capture_output=True)
+                subprocess.run(['launchctl', 'load',   plist], capture_output=True)
+
+            threading.Thread(target=_restart, daemon=True).start()
+            resp = json.dumps({'ok': True, 'output': 'Restarting… page will reload shortly.'})
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self._cors()
+            self.end_headers()
+            self.wfile.write(resp.encode())
+            return
+
         # POST /tasks/new — append a single new task atomically
         if self.path == '/tasks/new':
             length = int(self.headers.get('Content-Length', 0))
