@@ -25,7 +25,9 @@ def main():
         + 'If no matching task exists, create one first with '
         + 'POST ' + base_url + '/tasks/new '
         + u'— body: {\\"title\\": \\"...\\", \\"status\\": \\"in-progress\\"}. '
-        + 'Always update the task when done.'
+        + 'As you make progress, append log entries via PATCH ' + base_url + '/tasks/<id>/log '
+        + u'— body: {\\"text\\": \\"what you built or decided\\"}. '
+        + 'Always update task status when done.'
     )
 
     new_hooks = {

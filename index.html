@@ -234,15 +234,60 @@
     }
     .pr-link:hover { text-decoration: underline; }
 
-    /* ── Note history in modal ── */
-    .note-history { margin-top: 8px; display: flex; flex-direction: column; gap: 4px; }
-    .note-history-item {
-      font-size: 11px; color: var(--text-muted);
-      border-left: 2px solid var(--border);
-      padding: 4px 8px; border-radius: 0 4px 4px 0;
-      background: var(--surface2);
+    /* ── Progress log in modal ── */
+    .log-section { margin-top: 18px; }
+    .log-section-header {
+      font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.6px; color: var(--text-muted); margin-bottom: 10px;
+      display: flex; align-items: center; gap: 8px;
     }
-    .note-history-time { font-size: 10px; color: var(--text-muted); opacity: 0.7; display: block; margin-bottom: 2px; }
+    .log-count {
+      font-size: 10px; font-weight: 600;
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 20px; padding: 1px 7px; text-transform: none; letter-spacing: 0;
+    }
+    .log-add-row {
+      display: flex; gap: 7px; margin-bottom: 12px;
+    }
+    .log-add-row textarea {
+      flex: 1; background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 8px; color: var(--text); font-size: 13px;
+      padding: 8px 10px; outline: none; font-family: inherit;
+      resize: none; height: 38px; line-height: 1.4;
+      transition: border-color 0.15s, height 0.1s;
+    }
+    .log-add-row textarea:focus { border-color: var(--accent); height: 70px; }
+    .log-add-btn {
+      background: var(--surface2); border: 1px solid var(--border);
+      color: var(--text-muted); border-radius: 8px; cursor: pointer;
+      font-size: 12px; padding: 0 12px; white-space: nowrap;
+      transition: background 0.15s, color 0.15s; align-self: flex-start; height: 38px;
+    }
+    .log-add-btn:hover { background: var(--border); color: var(--text); }
+    .log-timeline { display: flex; flex-direction: column; gap: 0; }
+    .log-entry {
+      display: flex; gap: 10px; padding: 8px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .log-entry:last-child { border-bottom: none; }
+    .log-entry-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--accent-dim); border: 2px solid var(--accent);
+      flex-shrink: 0; margin-top: 5px;
+    }
+    .log-entry-body { flex: 1; min-width: 0; }
+    .log-entry-date {
+      font-size: 10px; color: var(--text-muted); margin-bottom: 2px;
+    }
+    .log-entry-text {
+      font-size: 13px; color: var(--text); line-height: 1.45; word-break: break-word;
+    }
+    /* Most recent log entry shown on cards */
+    .card-log-entry {
+      font-size: 11px; color: var(--text-muted); margin-top: 5px;
+      line-height: 1.35; word-break: break-word;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    }
 
     /* Inline subtasks on cards */
     .card-subtasks { margin-top: 8px; display: flex; flex-direction: column; gap: 4px; }
@@ -633,9 +678,19 @@
     </div>
 
     <div class="form-group">
-      <label>Notes</label>
-      <textarea id="taskNotes" placeholder="Add any notes, context, or links..."></textarea>
-      <div class="note-history" id="noteHistory" style="display:none"></div>
+      <label>Notes / Next steps</label>
+      <textarea id="taskNotes" placeholder="Current state, next steps, blockers..."></textarea>
+    </div>
+
+    <div class="log-section">
+      <div class="log-section-header">
+        Progress Log <span class="log-count" id="logCount">0</span>
+      </div>
+      <div class="log-add-row">
+        <textarea id="logNewEntry" placeholder="What happened? What did you build or decide?"></textarea>
+        <button type="button" class="log-add-btn" id="logAddBtn">Add</button>
+      </div>
+      <div class="log-timeline" id="logTimeline"></div>
     </div>
 
     <div class="modal-actions">
@@ -669,6 +724,7 @@
   let weekOffset = 0;
   let editingId = null;
   let modalSubtasks = [];
+  let modalLog = [];
 
   // ── Sync indicator ──────────────────────────────────────────
   const syncDot = document.getElementById('syncDot');
@@ -970,6 +1026,7 @@
 
     const { meta, extra } = buildMetaParts(task, false);
 
+    const lastLog = task.log && task.log.length ? task.log[task.log.length - 1] : null;
     card.innerHTML = `
       <div class="task-top">
         <div class="task-checkbox">${CHECK_SVG}</div>
@@ -977,6 +1034,7 @@
       </div>
       ${meta ? `<div class="task-meta">${meta}</div>` : ''}
       ${extra || ''}
+      ${lastLog && !task.done ? `<div class="card-log-entry">${escHtml(lastLog.text)}</div>` : ''}
       ${task.subtasks && task.subtasks.length > 0 ? `<div class="card-subtasks"></div>` : ''}`;
 
     card.querySelector('.task-checkbox').addEventListener('click', e => {
@@ -1121,8 +1179,10 @@
     // Show/hide blockedOn field based on status
     updateBlockedOnVisibility();
 
-    // Note history
-    renderNoteHistory(task ? (task.noteHistory || []) : []);
+    // Progress log
+    modalLog = task && task.log ? [...task.log] : [];
+    document.getElementById('logNewEntry').value = '';
+    renderLogTimeline();
 
     // Ongoing toggle
     updateOngoingToggleUI();
@@ -1151,16 +1211,25 @@
     document.getElementById('blockedOnRow').style.display = status === 'blocked' ? '' : 'none';
   }
 
-  function renderNoteHistory(history) {
-    const el = document.getElementById('noteHistory');
-    if (!history || history.length === 0) { el.style.display = 'none'; return; }
-    el.style.display = '';
-    el.innerHTML = history.map(h => {
-      const d = new Date(h.savedAt);
-      const when = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-      return `<div class="note-history-item">
-        <span class="note-history-time">${when}</span>
-        ${escHtml(h.text)}
+  function renderLogTimeline() {
+    const timeline = document.getElementById('logTimeline');
+    const count = document.getElementById('logCount');
+    count.textContent = modalLog.length;
+    if (modalLog.length === 0) {
+      timeline.innerHTML = '<div style="font-size:12px;color:var(--text-muted);padding:4px 0">No entries yet — add one above to start tracking progress.</div>';
+      return;
+    }
+    // Show most recent first
+    const entries = [...modalLog].reverse();
+    timeline.innerHTML = entries.map(e => {
+      const d = new Date(e.date);
+      const when = isNaN(d) ? '' : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+      return `<div class="log-entry">
+        <div class="log-entry-dot"></div>
+        <div class="log-entry-body">
+          <div class="log-entry-date">${when}</div>
+          <div class="log-entry-text">${escHtml(e.text)}</div>
+        </div>
       </div>`;
     }).join('');
   }
@@ -1287,7 +1356,7 @@
         }
         // Saving via UI clears the agent claim (human took over)
         tasks[idx] = { ...prev, title, day: dayStr, priority, notes, ongoing: isOngoing, subtasks,
-                        status, done, prLink, blockedOn, jiraKey, noteHistory: history,
+                        status, done, prLink, blockedOn, jiraKey, log: modalLog,
                         claimedBy: status === 'done' ? '' : prev.claimedBy,
                         lastUpdated: new Date().toISOString() };
       }
@@ -1296,7 +1365,7 @@
         id: Date.now().toString(),
         title, day: dayStr, priority, notes,
         ongoing: isOngoing, subtasks,
-        status, done, prLink, blockedOn, jiraKey, noteHistory: [],
+        status, done, prLink, blockedOn, jiraKey, log: modalLog,
         createdAt: new Date().toISOString(),
         lastUpdated: new Date().toISOString(),
       });
@@ -1337,6 +1406,23 @@
   });
 
   document.getElementById('taskStatus').addEventListener('change', updateBlockedOnVisibility);
+
+  document.getElementById('logAddBtn').addEventListener('click', () => {
+    const input = document.getElementById('logNewEntry');
+    const text = input.value.trim();
+    if (!text) return;
+    modalLog.push({ date: new Date().toISOString(), text });
+    input.value = '';
+    input.style.height = '38px';
+    renderLogTimeline();
+  });
+
+  document.getElementById('logNewEntry').addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      document.getElementById('logAddBtn').click();
+    }
+  });
 
   document.getElementById('addSubtaskBtn').addEventListener('click', () => {
     modalSubtasks.push({ id: 'st' + Date.now(), text: '', done: false });

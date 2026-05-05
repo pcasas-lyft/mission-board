@@ -49,23 +49,38 @@ def fmt_date(dt):
     return dt.strftime('%b %-d')
 
 
+def fmt_log_date(iso):
+    try:
+        d = datetime.fromisoformat(iso.replace('Z', '+00:00'))
+        return d.strftime('%b %-d')
+    except Exception:
+        return ''
+
 def task_line(t, dt):
-    parts = [f"- ~~**{t['title']}**~~"]
+    # Header line
+    header = f"~~**{t['title']}**~~"
     meta = [f"Completed {fmt_date(dt)}"]
     if t.get('jiraKey'):
         meta.append(f"[{t['jiraKey']}](https://jira.lyft.net/browse/{t['jiraKey']})")
     if t.get('prLink'):
         meta.append(f"[PR]({t['prLink']})")
-    if t.get('claimedBy'):
-        meta.append(f"`{t['claimedBy']}`")
-    parts[0] += '  · ' + ' · '.join(meta)
+    header += '  · ' + ' · '.join(meta)
 
+    parts = [f"- {header}"]
+
+    # Notes / next steps (if any — useful context on why it was done)
     notes = (t.get('notes') or '').strip()
     if notes:
-        for line in notes.splitlines():
-            line = line.strip()
-            if line:
-                parts.append(f"  - {line}")
+        first_line = notes.splitlines()[0].strip()
+        if first_line:
+            parts.append(f"  - 📌 {first_line}")
+
+    # Full log, most recent first
+    log = t.get('log') or []
+    for entry in reversed(log):
+        date_str = fmt_log_date(entry.get('date', ''))
+        prefix = f"**{date_str}:** " if date_str else ''
+        parts.append(f"  - {prefix}{entry['text'].strip()}")
 
     return '\n'.join(parts)
 

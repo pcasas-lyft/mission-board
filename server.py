@@ -168,6 +168,56 @@ class Handler(SimpleHTTPRequestHandler):
             super().do_GET()
 
     def do_PATCH(self):
+        # PATCH /tasks/<id>/log — append a log entry atomically
+        if self.path.startswith('/tasks/') and self.path.endswith('/log'):
+            task_id = self.path[len('/tasks/'):-len('/log')]
+            length = int(self.headers.get('Content-Length', 0))
+            body = self.rfile.read(length)
+            try:
+                payload = json.loads(body)
+            except json.JSONDecodeError:
+                self.send_response(400); self._cors(); self.end_headers()
+                self.wfile.write(b'{"error":"invalid JSON"}'); return
+
+            text = (payload.get('text') or '').strip()
+            if not text:
+                self.send_response(400); self._cors(); self.end_headers()
+                self.wfile.write(b'{"error":"text is required"}'); return
+
+            from datetime import datetime, timezone
+            entry = {
+                'date': payload.get('date') or datetime.now(timezone.utc).isoformat(),
+                'text': text,
+            }
+
+            with _file_lock:
+                tasks = []
+                if os.path.exists(TASKS_FILE):
+                    with open(TASKS_FILE) as f:
+                        tasks = json.load(f)
+                found = False
+                for t in tasks:
+                    if t.get('id') == task_id:
+                        t.setdefault('log', [])
+                        t['log'].append(entry)
+                        t['lastUpdated'] = entry['date']
+                        found = True
+                        break
+                if not found:
+                    self.send_response(404)
+                    self.send_header('Content-Type', 'application/json')
+                    self._cors(); self.end_headers()
+                    self.wfile.write(b'{"error":"task not found"}'); return
+                with open(TASKS_FILE, 'w') as f:
+                    json.dump(tasks, f)
+
+            broadcast('update')
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self._cors(); self.end_headers()
+            self.wfile.write(json.dumps({'ok': True, 'entry': entry}).encode())
+            return
+
         # PATCH /tasks/<id>  — merge-update a single task
         if self.path.startswith('/tasks/'):
             task_id = self.path[len('/tasks/'):]
@@ -348,6 +398,7 @@ class Handler(SimpleHTTPRequestHandler):
             new_task.setdefault('prLink', '')
             new_task.setdefault('blockedOn', '')
             new_task.setdefault('jiraKey', '')
+            new_task.setdefault('log', [])
             new_task.setdefault('noteHistory', [])
             new_task.setdefault('createdAt', new_task['id'])
             new_task.setdefault('lastUpdated', new_task['id'])

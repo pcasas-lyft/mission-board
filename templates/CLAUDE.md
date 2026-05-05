@@ -9,9 +9,10 @@ Check `WORKSTATUS.md` (this directory) at the start of every session to understa
 All tasks live at **http://localhost:3456** (must be running — see below if not).
 
 ```
-GET  /tasks          → all tasks
-POST /tasks/new      → create a single new task (safe — appends only)
-PATCH /tasks/<id>    → update a single task (preferred — never overwrites other tasks)
+GET  /tasks               → all tasks
+POST /tasks/new           → create a single new task (safe — appends only)
+PATCH /tasks/<id>         → update a single task (preferred — never overwrites other tasks)
+PATCH /tasks/<id>/log     → append a progress log entry (atomic, never loses history)
 ```
 
 ### At the start of every session
@@ -30,12 +31,20 @@ Minimal fields needed: `title` + `status`. Everything else defaults to sensible 
 
 ### When you finish work on a task
 
-PATCH the task with a status update before ending the session:
+First, append a log entry describing what you did:
+
+```bash
+curl -s -X PATCH http://localhost:3456/tasks/<id>/log \
+  -H "Content-Type: application/json" \
+  -d '{"text": "What you built, decided, or found out"}'
+```
+
+Then PATCH the task status:
 
 ```json
 {
   "status": "in-review",
-  "notes": "Done: <what was completed>\nNext: <concrete next step>",
+  "notes": "Next: <concrete next step>",
   "prLink": "https://github.com/...",
   "blockedOn": "",
   "claimedBy": "",

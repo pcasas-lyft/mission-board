@@ -23,12 +23,21 @@ def fmt_date(iso):
     except Exception:
         return iso[:10] if iso else ''
 
+def fmt_log_date(iso):
+    try:
+        d = datetime.fromisoformat(iso.replace('Z', '+00:00'))
+        return d.strftime('%b %-d')
+    except Exception:
+        return ''
+
 def task_line(t, show_day=False):
     parts = [f"**{t['title']}**"]
     if show_day and t.get('day') and t['day'] != 'unscheduled':
         parts.append(f"— {fmt_date(t['day'] + 'T00:00:00')}")
+    if t.get('jiraKey'):
+        parts.append(f"· [{t['jiraKey']}](https://jira.lyft.net/browse/{t['jiraKey']})")
     if t.get('prLink'):
-        parts.append(f"· [PR/Branch]({t['prLink']})")
+        parts.append(f"· [PR]({t['prLink']})")
     if t.get('claimedBy'):
         parts.append(f"· 🔒 `{t['claimedBy']}`")
     line = ' '.join(parts)
@@ -37,15 +46,20 @@ def task_line(t, show_day=False):
     if t.get('blockedOn'):
         details.append(f"  - ⛔ Blocked on: {t['blockedOn']}")
     if t.get('notes') and t['notes'].strip():
-        for note_line in t['notes'].strip().splitlines():
-            details.append(f"  - {note_line.strip()}")
+        details.append(f"  - 📌 **Next:** {t['notes'].strip().splitlines()[0].strip()}")
+
+    # Show last 3 log entries, most recent first
+    log = t.get('log') or []
+    if log:
+        for entry in reversed(log[-3:]):
+            date_str = fmt_log_date(entry.get('date', ''))
+            prefix = f"_{date_str}_ — " if date_str else ''
+            details.append(f"  - {prefix}{entry['text'].strip()}")
+
     if t.get('subtasks'):
         pending = [s for s in t['subtasks'] if not s.get('done')]
-        done_sts = [s for s in t['subtasks'] if s.get('done')]
         for s in pending:
             details.append(f"  - [ ] {s['text']}")
-        for s in done_sts:
-            details.append(f"  - [x] {s['text']}")
 
     return '- ' + line + ('\n' + '\n'.join(details) if details else '')
 
