@@ -18,8 +18,15 @@ PARENT_DIR="$(dirname "$INSTALL_DIR")"
 PYTHON3="$(which python3 2>/dev/null || echo python3)"
 WORKSTATUS_PATH="$PARENT_DIR/WORKSTATUS.md"
 USERNAME="$(whoami)"
-PLIST_LABEL="com.$USERNAME.todo-tracker"
+SAFE_USERNAME="$(echo "$USERNAME" | sed 's/[^a-zA-Z0-9]/-/g')"
+PLIST_LABEL="com.$SAFE_USERNAME.todo-tracker"
 PLIST_PATH="$HOME/Library/LaunchAgents/$PLIST_LABEL.plist"
+
+# ── Pre-flight checks ────────────────────────────────────────────────────────
+if ! command -v "$PYTHON3" &>/dev/null; then
+  echo "❌ python3 not found. Please install Python 3 and ensure it is on your PATH."
+  exit 1
+fi
 
 echo ""
 echo "🔧 Setting up todo-tracker"
@@ -75,8 +82,19 @@ if [ ! -f "$PARENT_DIR/CLAUDE.md" ]; then
     > "$PARENT_DIR/CLAUDE.md"
   echo "✓ Created $PARENT_DIR/CLAUDE.md"
 else
-  echo "✓ $PARENT_DIR/CLAUDE.md already exists — kept"
-  echo "  (If you moved the install dir, re-run setup.sh --force-claude to regenerate)"
+  # Detect stale install (unsubstituted placeholders or wrong path)
+  if grep -q "__INSTALL_DIR__\|__PARENT_DIR__" "$PARENT_DIR/CLAUDE.md" 2>/dev/null; then
+    echo "⚠️  $PARENT_DIR/CLAUDE.md has unsubstituted placeholders — regenerating..."
+    sed \
+      -e "s|__INSTALL_DIR__|$INSTALL_DIR|g" \
+      -e "s|__PARENT_DIR__|$PARENT_DIR|g" \
+      "$INSTALL_DIR/templates/CLAUDE.md" \
+      > "$PARENT_DIR/CLAUDE.md"
+    echo "✓ Regenerated $PARENT_DIR/CLAUDE.md"
+  else
+    echo "✓ $PARENT_DIR/CLAUDE.md already exists — kept"
+    echo "  (If you moved the install dir, re-run: bash setup.sh --force-claude)"
+  fi
 fi
 
 # ── 7. launchd agent (macOS only) ────────────────────────────────────────────

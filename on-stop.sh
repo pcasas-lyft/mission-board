@@ -18,13 +18,13 @@ BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
 NOTIF=$(python3 "$DIR/notif-summary.py" "$DIR/tasks.json" "$BRANCH" 2>/dev/null)
 
 # Use terminal-notifier if available (click opens the tracker),
-# otherwise fall back to plain osascript
+# fall back to osascript on macOS, silent on other platforms
 if command -v terminal-notifier &>/dev/null; then
   terminal-notifier \
     -title "Agent Done 🤖" \
     -message "$NOTIF" \
     -open "http://localhost:3456" \
     -sound Glass 2>/dev/null || true
-else
+elif [[ "$OSTYPE" == "darwin"* ]]; then
   osascript -e "display notification \"$NOTIF\" with title \"Agent Done 🤖\" sound name \"Glass\"" 2>/dev/null || true
 fi

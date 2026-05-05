@@ -61,7 +61,7 @@ If you're blocked and can't continue, use `status: "blocked"` and `blockedOn: "<
 ### If the tracker is unreachable
 
 The server may not be running. Tell the user:
-> The task tracker isn't running. Start it with: `python3 __INSTALL_DIR__/server.py`
+> The task tracker isn't running. Start it with: `python3 server.py` (from the todo-tracker directory)
 
 Don't silently skip the status update — let the user know.
 

@@ -29,14 +29,14 @@ def load_tasks():
 def fmt_date(iso):
     try:
         d = datetime.fromisoformat(iso.replace('Z', '+00:00'))
-        return d.strftime('%b %-d')
+        return f"{d.strftime('%b')} {d.day}"
     except Exception:
         return iso[:10] if iso else ''
 
 def fmt_log_date(iso):
     try:
         d = datetime.fromisoformat(iso.replace('Z', '+00:00'))
-        return d.strftime('%b %-d')
+        return f"{d.strftime('%b')} {d.day}"
     except Exception:
         return ''
 
@@ -79,7 +79,9 @@ def task_line(t, show_day=False, jira_base=''):
 def main():
     tasks = load_tasks()
     jira_base = load_jira_base()
-    now = datetime.now().strftime('%a %b %-d, %Y at %-I:%M %p')
+    _n = datetime.now()
+    _h = _n.hour % 12 or 12
+    now = f"{_n.strftime('%a %b')} {_n.day}, {_n.year} at {_h}:{_n.strftime('%M')} {_n.strftime('%p')}"
 
     not_done     = [t for t in tasks if not t.get('done') and t.get('status') != 'done']
     done_tasks   = [t for t in tasks if t.get('done') or t.get('status') == 'done']

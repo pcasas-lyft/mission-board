@@ -52,19 +52,25 @@ def task_ts(t):
 def week_label(dt):
     """'Week of Mon May 5, 2026'"""
     monday = dt - timedelta(days=dt.weekday())
-    return monday.strftime('Week of %a %b %-d, %Y')
+    return f"Week of {monday.strftime('%a %b')} {monday.day}, {monday.year}"
 
 
 def fmt_date(dt):
-    return dt.strftime('%b %-d')
+    return f"{dt.strftime('%b')} {dt.day}"
 
 
 def fmt_log_date(iso):
     try:
         d = datetime.fromisoformat(iso.replace('Z', '+00:00'))
-        return d.strftime('%b %-d')
+        return f"{d.strftime('%b')} {d.day}"
     except Exception:
         return ''
+
+def fmt_now():
+    """Cross-platform 'Mon May 5, 2026 at 3:04 PM' — avoids %-d/%-I (macOS-only)."""
+    n = datetime.now()
+    h = n.hour % 12 or 12
+    return f"{n.strftime('%a %b')} {n.day}, {n.year} at {h}:{n.strftime('%M')} {n.strftime('%p')}"
 
 def task_line(t, dt, jira_base=''):
     # Header line
@@ -105,7 +111,7 @@ def main():
     done = [t for t in all_tasks if t.get('done') or t.get('status') == 'done']
     if not done:
         # Write an empty-ish file rather than leaving a stale one
-        now = datetime.now().strftime('%a %b %-d, %Y at %-I:%M %p')
+        now = fmt_now()
         with open(DONELOG_FILE, 'w') as f:
             f.write(f"# Done Log\n_Last updated: {now}_\n\nNothing completed yet.\n")
         print("✓ DONELOG.md updated (0 tasks)", file=sys.stderr)
@@ -121,7 +127,7 @@ def main():
         label = week_label(dt)
         weeks.setdefault(label, []).append((t, dt))
 
-    now = datetime.now().strftime('%a %b %-d, %Y at %-I:%M %p')
+    now = fmt_now()
     lines = [
         "# Done Log",
         f"_Last updated: {now}_",

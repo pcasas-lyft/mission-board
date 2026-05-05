@@ -57,7 +57,8 @@ def main():
         try:
             with open(settings_path) as f:
                 settings = json.load(f)
-        except Exception:
+        except Exception as e:
+            print(f"⚠️  Could not parse {settings_path} ({e}) — starting fresh.", file=sys.stderr)
             settings = {}
 
     # Merge: our hooks win for the events we manage

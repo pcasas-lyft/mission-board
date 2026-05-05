@@ -1,14 +1,13 @@
-# todo-tracker
+# Mission Board
 
 A lightweight task tracker built for working with Claude Code agents. Tasks live in a local JSON file, a Python server serves a web UI and REST API, and Claude Code hooks keep everything in sync automatically.
 
 **What it does:**
-- Web UI at `localhost:3456` to manage tasks (drag to reorder, inline editing, subtasks)
+- Web UI at `localhost:3456` to manage tasks (drag to reorder, inline editing, subtasks, Jira linking)
 - Agents read `WORKSTATUS.md` at session start to see what's in flight
-- When an agent finishes, it updates the task status and you get a Mac notification with the task name
+- When an agent finishes, it updates the task status and you get a notification with the task name
 - Branch naming convention auto-claims tasks when you create a worktree
-
-![Tracker UI](https://github.com/user-attachments/assets/placeholder)
+- `/status` and `/done` slash commands give agents a live briefing and completed work history
 
 ---
 
@@ -64,7 +63,10 @@ Agents automatically:
 
 ### `/status` command
 In any Claude Code session, type `/status` to get a live briefing:
-> "Right now: feat/t4-tcs-mcp is working on Add TCS MCP integration. Up next: ..."
+> "Right now: feat/t4-tcs-mcp is working on Add auth module refactor. Up next: ..."
+
+### `/done` command
+Type `/done` in any session to see a summary of completed work grouped by week — useful for standups or retrospectives.
 
 ### Creating tasks via CLI
 ```bash
@@ -133,6 +135,7 @@ This pulls the latest code and re-applies configuration. Your `tasks.json` is ne
 | `/tasks` | GET | Fetch all tasks |
 | `/tasks/new` | POST | Append a new task |
 | `/tasks/<id>` | PATCH | Update a single task ← agents use this |
+| `/tasks/<id>/log` | PATCH | Append a progress log entry (atomic, never loses history) |
 | `/events` | GET | SSE stream for live UI updates |
 
 ### Task fields
