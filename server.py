@@ -3,8 +3,10 @@ import json, os, threading, queue, subprocess, getpass
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from socketserver import ThreadingMixIn
 
-INSTALL_DIR = os.path.dirname(os.path.abspath(__file__))
-TASKS_FILE  = os.path.join(INSTALL_DIR, 'tasks.json')
+INSTALL_DIR       = os.path.dirname(os.path.abspath(__file__))
+TASKS_FILE        = os.path.join(INSTALL_DIR, 'tasks.json')
+JIRA_CONFIG_FILE  = os.path.join(INSTALL_DIR, 'jira-config.json')
+JIRA_DEFAULT_URL  = 'https://jira.lyft.net'
 
 # SSE: list of per-client queues
 _clients = []
@@ -52,6 +54,86 @@ class Handler(SimpleHTTPRequestHandler):
             self._cors()
             self.end_headers()
             self.wfile.write(data)
+
+        elif self.path == '/jira-config':
+            # Return whether Jira is configured (never return the token itself)
+            cfg = {}
+            if os.path.exists(JIRA_CONFIG_FILE):
+                try:
+                    with open(JIRA_CONFIG_FILE) as f:
+                        cfg = json.load(f)
+                except Exception:
+                    pass
+            resp = json.dumps({
+                'configured': bool(cfg.get('token')),
+                'baseUrl': cfg.get('baseUrl', JIRA_DEFAULT_URL),
+            })
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self._cors()
+            self.end_headers()
+            self.wfile.write(resp.encode())
+
+        elif self.path.startswith('/jira/'):
+            key = self.path[len('/jira/'):].upper()
+            # Load config
+            cfg = {}
+            if os.path.exists(JIRA_CONFIG_FILE):
+                try:
+                    with open(JIRA_CONFIG_FILE) as f:
+                        cfg = json.load(f)
+                except Exception:
+                    pass
+            token = cfg.get('token', '')
+            base_url = cfg.get('baseUrl', JIRA_DEFAULT_URL).rstrip('/')
+
+            if not token:
+                self.send_response(401)
+                self.send_header('Content-Type', 'application/json')
+                self._cors()
+                self.end_headers()
+                self.wfile.write(json.dumps({'error': 'Jira not configured — add your PAT in Jira settings'}).encode())
+                return
+
+            import urllib.request, urllib.error
+            try:
+                req = urllib.request.Request(
+                    f'{base_url}/rest/api/2/issue/{key}',
+                    headers={'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'},
+                )
+                with urllib.request.urlopen(req, timeout=8) as r:
+                    data = json.loads(r.read())
+                fields = data.get('fields', {})
+                status = fields.get('status', {})
+                assignee = fields.get('assignee') or {}
+                resp = json.dumps({
+                    'key': data['key'],
+                    'summary': fields.get('summary', ''),
+                    'status': status.get('name', ''),
+                    'statusCategory': status.get('statusCategory', {}).get('colorName', ''),
+                    'assignee': assignee.get('displayName', ''),
+                    'priority': (fields.get('priority') or {}).get('name', ''),
+                    'type': (fields.get('issuetype') or {}).get('name', ''),
+                    'url': f'{base_url}/browse/{data["key"]}',
+                })
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self._cors()
+                self.end_headers()
+                self.wfile.write(resp.encode())
+            except urllib.error.HTTPError as e:
+                self.send_response(e.code)
+                self.send_header('Content-Type', 'application/json')
+                self._cors()
+                self.end_headers()
+                msg = 'Not found' if e.code == 404 else f'Jira error {e.code}'
+                self.wfile.write(json.dumps({'error': msg}).encode())
+            except Exception as e:
+                self.send_response(502)
+                self.send_header('Content-Type', 'application/json')
+                self._cors()
+                self.end_headers()
+                self.wfile.write(json.dumps({'error': str(e)}).encode())
 
         elif self.path == '/events':
             self.send_response(200)
@@ -134,6 +216,40 @@ class Handler(SimpleHTTPRequestHandler):
             self.wfile.write(b'{"ok":true}')
 
     def do_POST(self):
+        # POST /jira-config — save Jira token + base URL
+        if self.path == '/jira-config':
+            length = int(self.headers.get('Content-Length', 0))
+            body = self.rfile.read(length)
+            try:
+                payload = json.loads(body)
+            except Exception:
+                self.send_response(400)
+                self.send_header('Content-Type', 'application/json')
+                self._cors()
+                self.end_headers()
+                self.wfile.write(b'{"error":"invalid JSON"}')
+                return
+            # Load existing config and merge so we don't lose the token on a baseUrl-only update
+            cfg = {}
+            if os.path.exists(JIRA_CONFIG_FILE):
+                try:
+                    with open(JIRA_CONFIG_FILE) as f:
+                        cfg = json.load(f)
+                except Exception:
+                    pass
+            if 'token' in payload and payload['token']:
+                cfg['token'] = payload['token']
+            if 'baseUrl' in payload:
+                cfg['baseUrl'] = payload['baseUrl'].rstrip('/')
+            with open(JIRA_CONFIG_FILE, 'w') as f:
+                json.dump(cfg, f, indent=2)
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self._cors()
+            self.end_headers()
+            self.wfile.write(b'{"ok":true}')
+            return
+
         # POST /update — git pull and report what changed
         if self.path == '/update':
             try:
@@ -231,6 +347,7 @@ class Handler(SimpleHTTPRequestHandler):
             new_task.setdefault('subtasks', [])
             new_task.setdefault('prLink', '')
             new_task.setdefault('blockedOn', '')
+            new_task.setdefault('jiraKey', '')
             new_task.setdefault('noteHistory', [])
             new_task.setdefault('createdAt', new_task['id'])
             new_task.setdefault('lastUpdated', new_task['id'])

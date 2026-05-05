@@ -396,6 +396,66 @@
 
     @media (max-width: 600px) { .board { grid-template-columns: repeat(2, 1fr) !important; } }
 
+    /* ── Jira badge on cards ── */
+    .jira-badge {
+      display: inline-flex; align-items: center; gap: 3px;
+      font-size: 10px; font-weight: 600; font-family: monospace;
+      padding: 2px 6px; border-radius: 4px;
+      background: rgba(0,82,204,0.18); color: #6fa8ff;
+      border: 1px solid rgba(111,168,255,0.3);
+      text-decoration: none; white-space: nowrap;
+      transition: background 0.15s;
+    }
+    .jira-badge:hover { background: rgba(0,82,204,0.3); }
+
+    /* ── Jira preview in modal ── */
+    .jira-preview {
+      font-size: 12px; color: var(--text-muted);
+      padding: 6px 10px; background: var(--surface2);
+      border: 1px solid var(--border); border-radius: 6px;
+      margin-top: 6px; min-height: 28px;
+      display: flex; align-items: center; gap: 6px;
+      flex-wrap: wrap;
+    }
+    .jira-preview:empty { display: none; }
+    .jira-status-dot {
+      width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+    }
+    .jira-status-dot.yellow { background: var(--yellow); }
+    .jira-status-dot.green  { background: var(--green); }
+    .jira-status-dot.blue-grey { background: var(--text-muted); }
+
+    /* ── Jira settings button in header ── */
+    .jira-config-btn {
+      background: var(--surface2); border: 1px solid var(--border);
+      color: var(--text-muted); border-radius: 7px; cursor: pointer;
+      font-size: 12px; padding: 6px 9px; transition: background 0.15s, color 0.15s;
+      display: flex; align-items: center; gap: 5px;
+    }
+    .jira-config-btn:hover { background: var(--border); color: var(--text); }
+    .jira-config-btn .jira-dot {
+      width: 6px; height: 6px; border-radius: 50%; background: var(--text-muted);
+    }
+    .jira-config-btn .jira-dot.on { background: var(--green); }
+
+    /* ── Jira settings modal ── */
+    .jira-modal-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.65); z-index: 200;
+      align-items: center; justify-content: center;
+    }
+    .jira-modal-overlay.open { display: flex; }
+    .jira-modal {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 14px; width: 420px; max-width: 95vw;
+      box-shadow: var(--shadow); padding: 24px;
+    }
+    .jira-modal h2 { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+    .jira-modal .jira-subtitle {
+      font-size: 12px; color: var(--text-muted); margin-bottom: 18px;
+    }
+    .jira-modal .jira-subtitle a { color: var(--accent); }
+
     /* ── Update modal ── */
     .update-btn {
       background: var(--surface2); border: 1px solid var(--border);
@@ -442,6 +502,9 @@
   <div style="display:flex;align-items:center;gap:10px;">
     <div class="sync-dot" id="syncDot" title="Sync status"></div>
     <button class="update-btn" id="updateBtn" title="Pull latest updates from GitHub">↑</button>
+    <button class="jira-config-btn" id="jiraConfigBtn" title="Jira settings">
+      <span class="jira-dot" id="jiraDot"></span>Jira
+    </button>
     <button class="add-btn" id="openAddModal">+ New Task</button>
   </div>
 </header>
@@ -453,6 +516,31 @@
     <div class="update-actions">
       <button class="btn-cancel" id="updateRestartBtn" style="display:none">Restart Server</button>
       <button class="btn-cancel" id="updateCloseBtn">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Jira Settings Modal -->
+<div class="jira-modal-overlay" id="jiraModalOverlay">
+  <div class="jira-modal">
+    <h2>Jira Setup</h2>
+    <p class="jira-subtitle">
+      Generate a token at
+      <a href="https://jira.lyft.net/secure/ViewProfile.jspa?selectedTab=com.atlassian.pats.pats-plugin:jira-user-personal-access-tokens" target="_blank" rel="noopener">
+        jira.lyft.net → Profile → Personal Access Tokens
+      </a>
+    </p>
+    <div class="form-group">
+      <label>Base URL</label>
+      <input type="text" id="jiraBaseUrl" value="https://jira.lyft.net" />
+    </div>
+    <div class="form-group">
+      <label>Personal Access Token</label>
+      <input type="password" id="jiraToken" placeholder="Paste your PAT here" autocomplete="off" />
+    </div>
+    <div class="update-actions" style="margin-top:18px">
+      <button class="btn-cancel" id="jiraModalClose">Cancel</button>
+      <button class="btn-save" id="jiraModalSave">Save</button>
     </div>
   </div>
 </div>
@@ -530,6 +618,12 @@
     <div class="form-group" id="blockedOnRow" style="display:none">
       <label>Blocked on</label>
       <input type="text" id="taskBlockedOn" placeholder="Who or what is blocking this?" />
+    </div>
+
+    <div class="form-group" id="jiraKeyRow">
+      <label>Jira Ticket</label>
+      <input type="text" id="taskJiraKey" placeholder="e.g. ENG-123" style="width:140px" />
+      <div class="jira-preview" id="jiraPreview"></div>
     </div>
 
     <div class="form-group">
@@ -976,6 +1070,10 @@
     if (task.prLink && task.prLink.trim()) {
       meta += `<a class="pr-link" href="${escHtml(task.prLink)}" target="_blank" rel="noopener" title="${escHtml(task.prLink)}">🔗 PR</a>`;
     }
+    if (task.jiraKey && task.jiraKey.trim()) {
+      const jiraBase = window._jiraBaseUrl || 'https://jira.lyft.net';
+      meta += `<a class="jira-badge" href="${jiraBase}/browse/${escHtml(task.jiraKey)}" target="_blank" rel="noopener">${escHtml(task.jiraKey)}</a>`;
+    }
     if (task.claimedBy && task.claimedBy.trim()) {
       meta += `<span class="claimed-badge" title="Claimed by ${escHtml(task.claimedBy)}">🔒</span>`;
     }
@@ -1012,6 +1110,13 @@
     document.getElementById('taskPrLink').value = task ? (task.prLink || '') : '';
     document.getElementById('taskBlockedOn').value = task ? (task.blockedOn || '') : '';
     document.getElementById('deleteTaskBtn').style.display = task ? '' : 'none';
+
+    // Jira key — load and fetch preview if set
+    const jiraKeyEl = document.getElementById('taskJiraKey');
+    const jiraPreviewEl = document.getElementById('jiraPreview');
+    jiraKeyEl.value = task ? (task.jiraKey || '') : '';
+    jiraPreviewEl.innerHTML = '';
+    if (task && task.jiraKey) fetchJiraPreview(task.jiraKey);
 
     // Show/hide blockedOn field based on status
     updateBlockedOnVisibility();
@@ -1167,6 +1272,7 @@
     const status   = document.getElementById('taskStatus').value;
     const prLink   = document.getElementById('taskPrLink').value.trim();
     const blockedOn = status === 'blocked' ? document.getElementById('taskBlockedOn').value.trim() : '';
+    const jiraKey  = document.getElementById('taskJiraKey').value.trim().toUpperCase();
     const done     = status === 'done';
 
     if (editingId) {
@@ -1181,7 +1287,7 @@
         }
         // Saving via UI clears the agent claim (human took over)
         tasks[idx] = { ...prev, title, day: dayStr, priority, notes, ongoing: isOngoing, subtasks,
-                        status, done, prLink, blockedOn, noteHistory: history,
+                        status, done, prLink, blockedOn, jiraKey, noteHistory: history,
                         claimedBy: status === 'done' ? '' : prev.claimedBy,
                         lastUpdated: new Date().toISOString() };
       }
@@ -1190,7 +1296,7 @@
         id: Date.now().toString(),
         title, day: dayStr, priority, notes,
         ongoing: isOngoing, subtasks,
-        status, done, prLink, blockedOn, noteHistory: [],
+        status, done, prLink, blockedOn, jiraKey, noteHistory: [],
         createdAt: new Date().toISOString(),
         lastUpdated: new Date().toISOString(),
       });
@@ -1271,6 +1377,80 @@
   connectSSE();
 
   loadTasks();
+
+  // ── Jira integration ──────────────────────────────────────────────────────
+  window._jiraBaseUrl = 'https://jira.lyft.net';
+
+  async function loadJiraConfig() {
+    try {
+      const res = await fetch('/jira-config');
+      const data = await res.json();
+      window._jiraBaseUrl = data.baseUrl || 'https://jira.lyft.net';
+      document.getElementById('jiraDot').classList.toggle('on', data.configured);
+      document.getElementById('jiraBaseUrl').value = data.baseUrl || 'https://jira.lyft.net';
+    } catch (_) {}
+  }
+  loadJiraConfig();
+
+  async function fetchJiraPreview(key) {
+    if (!key || !/^[A-Z]+-\d+$/i.test(key.trim())) {
+      document.getElementById('jiraPreview').innerHTML = '';
+      return;
+    }
+    const preview = document.getElementById('jiraPreview');
+    preview.innerHTML = '<span style="color:var(--text-muted)">Fetching…</span>';
+    try {
+      const res = await fetch(`/jira/${encodeURIComponent(key.trim().toUpperCase())}`);
+      const data = await res.json();
+      if (!res.ok) {
+        preview.innerHTML = `<span style="color:var(--red)">${escHtml(data.error || 'Error')}</span>`;
+        return;
+      }
+      const dotClass = { yellow: 'yellow', green: 'green', 'blue-grey': 'blue-grey' }[data.statusCategory] || 'blue-grey';
+      const assigneeHtml = data.assignee ? `<span style="color:var(--text-muted)">· ${escHtml(data.assignee)}</span>` : '';
+      preview.innerHTML = `
+        <span class="jira-status-dot ${dotClass}"></span>
+        <a href="${escHtml(data.url)}" target="_blank" rel="noopener" style="color:var(--accent);font-weight:500">${escHtml(data.summary)}</a>
+        <span style="color:var(--text-muted)">[${escHtml(data.status)}]</span>
+        ${assigneeHtml}
+      `;
+    } catch (e) {
+      preview.innerHTML = `<span style="color:var(--red)">Could not reach Jira</span>`;
+    }
+  }
+
+  // Debounce Jira key input
+  let _jiraTimer = null;
+  document.getElementById('taskJiraKey').addEventListener('input', e => {
+    clearTimeout(_jiraTimer);
+    const key = e.target.value.trim();
+    if (!key) { document.getElementById('jiraPreview').innerHTML = ''; return; }
+    _jiraTimer = setTimeout(() => fetchJiraPreview(key), 500);
+  });
+
+  // Jira settings modal
+  const jiraModalOverlay = document.getElementById('jiraModalOverlay');
+  document.getElementById('jiraConfigBtn').addEventListener('click', () => jiraModalOverlay.classList.add('open'));
+  document.getElementById('jiraModalClose').addEventListener('click', () => jiraModalOverlay.classList.remove('open'));
+  jiraModalOverlay.addEventListener('click', e => { if (e.target === jiraModalOverlay) jiraModalOverlay.classList.remove('open'); });
+
+  document.getElementById('jiraModalSave').addEventListener('click', async () => {
+    const token   = document.getElementById('jiraToken').value.trim();
+    const baseUrl = document.getElementById('jiraBaseUrl').value.trim();
+    if (!token && !baseUrl) { jiraModalOverlay.classList.remove('open'); return; }
+    try {
+      await fetch('/jira-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, baseUrl }),
+      });
+      document.getElementById('jiraToken').value = '';
+      await loadJiraConfig();
+      jiraModalOverlay.classList.remove('open');
+    } catch (e) {
+      alert('Could not save Jira config: ' + e);
+    }
+  });
 
   // ── Update button ──────────────────────────────────────────────────────────
   const updateBtn      = document.getElementById('updateBtn');
