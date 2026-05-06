@@ -81,6 +81,8 @@ def task_line(t, dt, jira_base=''):
             meta.append(f"[{t['jiraKey']}]({jira_base}/browse/{t['jiraKey']})")
         else:
             meta.append(f"`{t['jiraKey']}`")
+    if t.get('specLink'):
+        meta.append(f"[📋 Spec]({t['specLink']})")
     if t.get('prLink'):
         meta.append(f"[PR]({t['prLink']})")
     header += '  · ' + ' · '.join(meta)

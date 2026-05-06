@@ -49,6 +49,8 @@ def task_line(t, show_day=False, jira_base=''):
             parts.append(f"· [{t['jiraKey']}]({jira_base}/browse/{t['jiraKey']})")
         else:
             parts.append(f"· `{t['jiraKey']}`")
+    if t.get('specLink'):
+        parts.append(f"· [📋 Spec]({t['specLink']})")
     if t.get('prLink'):
         parts.append(f"· [PR]({t['prLink']})")
     if t.get('claimedBy'):

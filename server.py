@@ -422,6 +422,7 @@ class Handler(SimpleHTTPRequestHandler):
             new_task.setdefault('notes', '')
             new_task.setdefault('subtasks', [])
             new_task.setdefault('prLink', '')
+            new_task.setdefault('specLink', '')
             new_task.setdefault('blockedOn', '')
             new_task.setdefault('jiraKey', '')
             new_task.setdefault('log', [])

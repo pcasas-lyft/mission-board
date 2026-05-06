@@ -675,6 +675,16 @@
     </div>
 
     <div class="form-group">
+      <label>Spec</label>
+      <div style="display:flex;gap:6px;align-items:center">
+        <input type="text" id="taskSpecLink" placeholder="https://docs.google.com/..." style="flex:1" />
+        <a id="specLinkOpen" href="#" target="_blank" rel="noopener"
+           style="display:none;font-size:13px;color:var(--accent);padding:0 4px;text-decoration:none"
+           title="Open Spec">↗</a>
+      </div>
+    </div>
+
+    <div class="form-group">
       <label>Subtasks</label>
       <div class="subtask-list" id="subtaskList"></div>
       <button type="button" class="add-subtask-btn" id="addSubtaskBtn">+ Add subtask</button>
@@ -1121,6 +1131,10 @@
       const allDone = done === total;
       meta += `<span class="subtask-progress${allDone ? ' all-done' : ''}">${done}/${total} done</span>`;
     }
+    if (task.specLink && task.specLink.trim()) {
+      const safeUrl = /^https?:\/\//i.test(task.specLink.trim()) ? task.specLink.trim() : null;
+      if (safeUrl) meta += `<a class="pr-link" href="${escHtml(safeUrl)}" target="_blank" rel="noopener" title="${escHtml(safeUrl)}">📋 Spec</a>`;
+    }
     if (task.prLink && task.prLink.trim()) {
       const safeUrl = /^https?:\/\//i.test(task.prLink.trim()) ? task.prLink.trim() : null;
       if (safeUrl) meta += `<a class="pr-link" href="${escHtml(safeUrl)}" target="_blank" rel="noopener" title="${escHtml(safeUrl)}">🔗 PR</a>`;
@@ -1167,8 +1181,10 @@
     document.getElementById('taskPriority').value = task ? (task.priority || 'none') : 'none';
     document.getElementById('taskStatus').value = task ? (task.status || 'todo') : 'todo';
     document.getElementById('taskPrLink').value = task ? (task.prLink || '') : '';
+    document.getElementById('taskSpecLink').value = task ? (task.specLink || '') : '';
     document.getElementById('taskBlockedOn').value = task ? (task.blockedOn || '') : '';
     updatePrLinkBtn();
+    updateSpecLinkBtn();
     document.getElementById('deleteTaskBtn').style.display = task ? '' : 'none';
 
     // Jira key — load and fetch preview if set
@@ -1342,6 +1358,7 @@
 
     const status   = document.getElementById('taskStatus').value;
     const prLink   = document.getElementById('taskPrLink').value.trim();
+    const specLink = document.getElementById('taskSpecLink').value.trim();
     const blockedOn = status === 'blocked' ? document.getElementById('taskBlockedOn').value.trim() : '';
     const jiraKey  = document.getElementById('taskJiraKey').value.trim().toUpperCase();
     const done     = status === 'done';
@@ -1354,7 +1371,7 @@
         const prev = tasks[idx];
         const patch = {
           title, day: dayStr, priority, notes, ongoing: isOngoing, subtasks,
-          status, done, prLink, blockedOn, jiraKey, log: modalLog,
+          status, done, prLink, specLink, blockedOn, jiraKey, log: modalLog,
           claimedBy: status === 'done' ? '' : prev.claimedBy,
           lastUpdated: new Date().toISOString(),
         };
@@ -1376,7 +1393,7 @@
         id: `tmp-${Date.now()}`,   // optimistic id — replaced by server response
         title, day: dayStr, priority, notes,
         ongoing: isOngoing, subtasks,
-        status, done, prLink, blockedOn, jiraKey, log: modalLog,
+        status, done, prLink, specLink, blockedOn, jiraKey, log: modalLog,
         createdAt: new Date().toISOString(),
         lastUpdated: new Date().toISOString(),
       };
@@ -1445,6 +1462,16 @@
     if (show) prLinkOpen.href = url;
   }
   prLinkInput.addEventListener('input', updatePrLinkBtn);
+
+  const specLinkInput = document.getElementById('taskSpecLink');
+  const specLinkOpen  = document.getElementById('specLinkOpen');
+  function updateSpecLinkBtn() {
+    const url = specLinkInput.value.trim();
+    const show = url.startsWith('http');
+    specLinkOpen.style.display = show ? '' : 'none';
+    if (show) specLinkOpen.href = url;
+  }
+  specLinkInput.addEventListener('input', updateSpecLinkBtn);
 
   document.getElementById('logAddBtn').addEventListener('click', () => {
     const input = document.getElementById('logNewEntry');
