@@ -7,6 +7,7 @@ INSTALL_DIR       = os.path.dirname(os.path.abspath(__file__))
 TASKS_FILE        = os.path.join(INSTALL_DIR, 'tasks.json')
 JIRA_CONFIG_FILE  = os.path.join(INSTALL_DIR, 'jira-config.json')
 JIRA_DEFAULT_URL  = ''
+SPECS_DIR         = os.path.normpath(os.path.join(INSTALL_DIR, '..', 'specs'))
 
 # SSE: list of per-client queues
 _clients = []
@@ -153,6 +154,40 @@ class Handler(SimpleHTTPRequestHandler):
                 self._cors()
                 self.end_headers()
                 self.wfile.write(json.dumps({'error': str(e)}).encode())
+
+        elif self.path == '/specs':
+            # List all .md files in the specs directory
+            files = []
+            if os.path.isdir(SPECS_DIR):
+                files = sorted(f for f in os.listdir(SPECS_DIR) if f.endswith('.md'))
+            resp = json.dumps(files).encode()
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self._cors()
+            self.end_headers()
+            self.wfile.write(resp)
+
+        elif self.path.startswith('/specs/'):
+            # Serve a single spec file — only allow .md files, no path traversal
+            filename = self.path[len('/specs/'):]
+            if not filename.endswith('.md') or '/' in filename or '..' in filename:
+                self.send_response(400)
+                self._cors(); self.end_headers()
+                self.wfile.write(b'{"error":"invalid filename"}')
+                return
+            filepath = os.path.join(SPECS_DIR, filename)
+            if not os.path.isfile(filepath):
+                self.send_response(404)
+                self._cors(); self.end_headers()
+                self.wfile.write(b'{"error":"spec not found"}')
+                return
+            with open(filepath, 'rb') as f:
+                data = f.read()
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/plain; charset=utf-8')
+            self._cors()
+            self.end_headers()
+            self.wfile.write(data)
 
         elif self.path == '/events':
             self.send_response(200)
