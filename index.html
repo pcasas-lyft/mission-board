@@ -338,35 +338,14 @@
     }
     .card-st-text.checked { text-decoration: line-through; color: var(--done-text); }
 
-    /* ── Subtask mini-cards in day columns ── */
-    .subtask-mini-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-left: 3px solid var(--accent-dim);
-      border-radius: var(--radius);
-      padding: 7px 10px;
-      margin-bottom: 7px;
-      cursor: pointer;
-      transition: border-color 0.15s, background 0.15s;
+    /* ── Parent badge on subtask cards ── */
+    .parent-badge {
+      font-size: 10px; color: var(--text-muted);
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 4px; padding: 1px 5px; white-space: nowrap;
+      max-width: 180px; overflow: hidden; text-overflow: ellipsis;
+      display: inline-block; vertical-align: middle;
     }
-    .subtask-mini-card:hover { border-color: var(--accent); background: var(--surface2); }
-    .subtask-mini-card:hover { border-left-color: var(--accent); }
-    .subtask-mini-card.done { opacity: 0.4; }
-    .subtask-mini-card.done .smc-text { text-decoration: line-through; color: var(--done-text); }
-    .smc-top { display: flex; align-items: flex-start; gap: 7px; }
-    .smc-checkbox {
-      width: 13px; height: 13px; border-radius: 3px;
-      border: 1.5px solid var(--accent-dim); background: transparent;
-      cursor: pointer; flex-shrink: 0; margin-top: 2px;
-      display: flex; align-items: center; justify-content: center;
-      transition: all 0.15s;
-    }
-    .subtask-mini-card.done .smc-checkbox { background: var(--green); border-color: var(--green); }
-    .subtask-mini-card.done .smc-checkbox svg { display: block; }
-    .smc-checkbox svg { display: none; }
-    .smc-content { flex: 1; min-width: 0; }
-    .smc-text { font-size: 12px; font-weight: 500; color: var(--text); line-height: 1.35; word-break: break-word; }
-    .smc-parent { font-size: 10px; color: var(--text-muted); margin-top: 3px; }
 
     /* ── Day select in subtask list ── */
     .st-day {
@@ -1475,17 +1454,19 @@
 
   function makeSubtaskMiniCard(subtask, parentTask) {
     const card = document.createElement('div');
-    card.className = 'subtask-mini-card' + (subtask.done ? ' done' : '');
+    card.className = 'task-card' + (subtask.done ? ' done' : '');
+    card.dataset.status = subtask.done ? 'done' : 'todo';
+
     card.innerHTML = `
-      <div class="smc-top">
-        <div class="smc-checkbox">${CHECK_SVG}</div>
-        <div class="smc-content">
-          <div class="smc-text">${escHtml(subtask.text)}</div>
-          <div class="smc-parent">↳ ${escHtml(parentTask.title)}</div>
-        </div>
+      <div class="task-top">
+        <div class="task-checkbox">${CHECK_SVG}</div>
+        <div class="task-title">${escHtml(subtask.text)}</div>
+      </div>
+      <div class="task-meta">
+        <span class="parent-badge">↳ ${escHtml(parentTask.title)}</span>
       </div>`;
 
-    card.querySelector('.smc-checkbox').addEventListener('click', e => {
+    card.querySelector('.task-checkbox').addEventListener('click', e => {
       e.stopPropagation();
       subtask.done = !subtask.done;
       parentTask.lastUpdated = new Date().toISOString();
