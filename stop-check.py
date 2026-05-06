@@ -2,18 +2,16 @@
 """
 Stop hook check — called by on-stop.sh before sending the notification.
 
-If the current task is still in-progress, blocks the stop ONCE and
-asks the agent to update the task before the session closes.
+If any session task is still in-progress or todo, blocks the stop ONCE and
+asks the agent to update all of them before the session closes.
 
-Uses a flag file to avoid blocking more than once per session end sequence
-(so if the agent can't update for some reason, it can still exit on the
-second attempt).
+Uses a flag file to avoid blocking more than once per session end sequence.
 """
 import json, os, sys, urllib.request
 
 INSTALL_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, INSTALL_DIR)
-from lib import session_task_file
+from lib import session_task_file, read_session_tasks
 
 BASE_URL = 'http://localhost:3456'
 
@@ -21,20 +19,15 @@ BASE_URL = 'http://localhost:3456'
 def main():
     branch = sys.argv[1] if len(sys.argv) > 1 else ''
 
-    # Only check when we have a named, non-default branch
     if not branch or branch in ('HEAD', 'main', 'master', ''):
         return
 
-    tf = session_task_file(branch)
-    if not os.path.exists(tf):
-        return  # No linked task for this session
-
-    task_id = open(tf).read().strip()
-    if not task_id:
+    task_ids = read_session_tasks(branch)
+    if not task_ids:
         return
 
-    # Flag file: written on first block, removed on second (allows through)
-    flag = tf + '.stop-reminded'
+    # Flag file: block once, then let through on second attempt
+    flag = session_task_file(branch) + '.stop-reminded'
     if os.path.exists(flag):
         try:
             os.remove(flag)
@@ -42,41 +35,50 @@ def main():
             pass
         return  # Already reminded once — let the session end
 
-    # Fetch all tasks and find this one
+    # Fetch all tasks
     try:
         with urllib.request.urlopen(f'{BASE_URL}/tasks', timeout=3) as r:
             tasks = json.loads(r.read())
-        task = next((t for t in tasks if t.get('id') == task_id), None)
-        if not task:
-            return  # Task not found (may have been deleted)
     except Exception:
         return  # Server unreachable — don't block
 
-    status = task.get('status', '')
-    if status not in ('in-progress', 'todo'):
-        return  # Already updated — allow the stop
+    # Find session tasks that still need an update
+    pending = []
+    for tid in task_ids:
+        task = next((t for t in tasks if t.get('id') == tid), None)
+        if task and task.get('status') in ('in-progress', 'todo'):
+            pending.append(task)
 
-    title = task.get('title', task_id)
+    if not pending:
+        return  # All tasks already updated — allow the stop
 
-    # Write the flag so a second stop attempt goes through
+    # Write flag so second stop attempt goes through
     try:
         open(flag, 'w').close()
     except Exception:
         pass
 
-    # Emit block decision — Claude Code shows this to the agent
-    print(json.dumps({
-        'decision': 'block',
-        'reason': (
-            f'Task "{title}" is still in-progress.\n\n'
-            f'Please update it before finishing:\n\n'
-            f'curl -s -X PATCH {BASE_URL}/tasks/{task_id} \\\n'
+    task_word = 'task' if len(pending) == 1 else 'tasks'
+    titles = ', '.join(f'"{t["title"]}"' for t in pending)
+    curls = []
+    for t in pending:
+        curls.append(
+            f'# {t["title"]} ({t["id"]})\n'
+            f'curl -s -X PATCH {BASE_URL}/tasks/{t["id"]} \\\n'
             f'  -H "Content-Type: application/json" \\\n'
             f'  -d \'{{"status":"in-review",'
             f'"notes":"Done: ...\\nNext: ...",'
             f'"prLinks":[{{"url":"<PR>","label":"<repo #N>"}}],'
-            f'"claimedBy":"","lastUpdated":"<ISO>"}}\'\n\n'
-            f'If still in progress, update notes with current state and set claimedBy: "".'
+            f'"claimedBy":"","lastUpdated":"<ISO>"}}\''
+        )
+
+    print(json.dumps({
+        'decision': 'block',
+        'reason': (
+            f'{len(pending)} {task_word} still in-progress: {titles}\n\n'
+            f'Please update before finishing:\n\n'
+            + '\n\n'.join(curls)
+            + '\n\nIf still in progress, update notes with current state and set claimedBy: "".'
         ),
     }))
 

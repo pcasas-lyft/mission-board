@@ -17,7 +17,7 @@ import json, os, sys
 
 # Add the tracker directory to the path so we can import lib.py
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from lib import find_task_by_slug
+from lib import find_task_by_slug, read_session_tasks
 
 
 def trunc(s, n=36):
@@ -35,52 +35,59 @@ def main():
     except Exception:
         return  # silent — server may be down
 
-    task = None
+    session_tasks = []
 
-    # Strategy 1: explicit session→task file written by auto-claim-task.py
+    # Strategy 1: session file (new array format or legacy single ID)
     if task_id_file and os.path.exists(task_id_file):
         try:
-            task_id = open(task_id_file).read().strip()
-            task = next((t for t in tasks if t.get('id') == task_id), None)
+            task_ids = read_session_tasks(branch) if branch else []
+            # Fallback: read the file directly if read_session_tasks returns nothing
+            if not task_ids:
+                raw = open(task_id_file).read().strip()
+                import json as _j
+                task_ids = _j.loads(raw) if raw.startswith('[') else ([raw] if raw else [])
+            session_tasks = [t for t in tasks if t.get('id') in task_ids]
         except Exception:
             pass
 
-    # Strategy 2: claimedBy still set on the task
-    if not task and branch and branch not in ('HEAD', 'main', 'master', ''):
-        task = next((t for t in tasks if t.get('claimedBy') == branch), None)
+    # Strategy 2: claimedBy
+    if not session_tasks and branch and branch not in ('HEAD', 'main', 'master', ''):
+        claimed = [t for t in tasks if t.get('claimedBy') == branch]
+        if claimed:
+            session_tasks = claimed
 
-    # Strategy 3: slug match (only fires when no explicit link was found)
-    if not task and branch and branch not in ('HEAD', 'main', 'master', ''):
-        task = find_task_by_slug(tasks, branch)
+    # Strategy 3: slug match
+    if not session_tasks and branch and branch not in ('HEAD', 'main', 'master', ''):
+        t = find_task_by_slug(tasks, branch)
+        if t:
+            session_tasks = [t]
 
-    # No reliable match — stay silent rather than show wrong task
-    if not task:
-        return
+    if not session_tasks:
+        return  # No reliable match — stay silent
 
-    status_icon = {
-        'in-progress': '🟡',
-        'in-review':   '🔄',
-        'blocked':     '⛔',
-        'done':        '✅',
-    }.get(task.get('status', ''), '•')
+    STATUS_ICON  = {'in-progress':'🟡','in-review':'🔄','blocked':'⛔','done':'✅'}
+    STATUS_LABEL = {'in-progress':'Still in progress','in-review':'In review',
+                    'blocked':'Blocked','done':'Done ✓'}
 
-    status_label = {
-        'in-progress': 'Still in progress',
-        'in-review':   'In review',
-        'blocked':     'Blocked',
-        'done':        'Done ✓',
-    }.get(task.get('status', ''), task.get('status', 'Updated'))
-
-    lines = [f"{status_icon} {status_label}: {trunc(task['title'])}"]
-
-    if task.get('blockedOn'):
-        lines.append(f"Waiting on: {trunc(task['blockedOn'], 40)}")
-
-    notes = (task.get('notes') or '').strip()
-    if notes:
-        last_line = [l.strip() for l in notes.splitlines() if l.strip()][-1]
-        if last_line:
-            lines.append(trunc(last_line, 50))
+    if len(session_tasks) == 1:
+        task = session_tasks[0]
+        icon  = STATUS_ICON.get(task.get('status', ''), '•')
+        label = STATUS_LABEL.get(task.get('status', ''), task.get('status', 'Updated'))
+        lines = [f"{icon} {label}: {trunc(task['title'])}"]
+        if task.get('blockedOn'):
+            lines.append(f"Waiting on: {trunc(task['blockedOn'], 40)}")
+        notes = (task.get('notes') or '').strip()
+        if notes:
+            last_line = [l.strip() for l in notes.splitlines() if l.strip()][-1]
+            if last_line:
+                lines.append(trunc(last_line, 50))
+    else:
+        # Multi-task session summary
+        summary_parts = []
+        for t in session_tasks:
+            icon = STATUS_ICON.get(t.get('status', ''), '•')
+            summary_parts.append(f"{icon} {trunc(t['title'], 28)}")
+        lines = [f"{len(session_tasks)} tasks this session:"] + summary_parts
 
     print('\n'.join(lines))
 

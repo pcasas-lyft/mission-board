@@ -21,7 +21,7 @@ import json, sys, re, os, subprocess, urllib.request, urllib.error
 from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from lib import find_task_by_slug, session_task_file
+from lib import find_task_by_slug, session_task_file, write_session_tasks
 
 BASE_URL = 'http://localhost:3456'
 
@@ -105,10 +105,9 @@ def main():
     except Exception:
         sys.exit(0)
 
-    # Write the session task file so on-stop.sh can find this task reliably
+    # Write session task file (array format) so stop hook can find all tasks
     try:
-        with open(session_task_file(branch), 'w') as f:
-            f.write(task_id)
+        write_session_tasks(branch, [task_id])
     except Exception:
         pass  # non-fatal — notification will fall back to slug matching
 

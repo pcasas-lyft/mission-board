@@ -47,7 +47,35 @@ def safe_branch_filename(branch):
 
 
 def session_task_file(branch):
-    """Return the path of the temp file used to link a branch to a task ID."""
+    """Return the path of the temp file used to link a branch to task IDs."""
     import os, tempfile
     safe = safe_branch_filename(branch)
     return os.path.join(tempfile.gettempdir(), f'claude-task-{safe}.id')
+
+
+def read_session_tasks(branch):
+    """
+    Return list of task IDs linked to this branch's session.
+    Backward-compatible: handles both old single-ID format and new JSON-array format.
+    """
+    import os, json
+    tf = session_task_file(branch)
+    if not os.path.exists(tf):
+        return []
+    content = open(tf).read().strip()
+    if not content:
+        return []
+    if content.startswith('['):
+        try:
+            return [tid for tid in json.loads(content) if tid]
+        except Exception:
+            return []
+    return [content]   # legacy single-ID format
+
+
+def write_session_tasks(branch, task_ids):
+    """Write the list of task IDs to the session file."""
+    import json
+    tf = session_task_file(branch)
+    with open(tf, 'w') as f:
+        f.write(json.dumps(list(dict.fromkeys(task_ids))))  # deduplicate, preserve order

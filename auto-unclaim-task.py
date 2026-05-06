@@ -8,7 +8,7 @@ import json, sys, os, urllib.request, urllib.error
 from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from lib import session_task_file
+from lib import session_task_file, read_session_tasks
 
 BASE_URL = 'http://localhost:3456'
 
