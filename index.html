@@ -8,21 +8,21 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg: #1d0c17;
-      --surface: #271220;
-      --surface2: #32192a;
-      --border: #4a2438;
-      --accent: #cf0090;
-      --accent-dim: #820076;
-      --text: #f5e8f0;
-      --text-muted: #9e7a8e;
-      --done-text: #5a3a4a;
-      --green: #4ade80;
-      --red: #f87171;
-      --yellow: #fbbf24;
-      --purple: #d07cef;
+      --bg: #1e1e2e;
+      --surface: #313244;
+      --surface2: #45475a;
+      --border: #585b70;
+      --accent: #89b4fa;
+      --accent-dim: #5a7dcc;
+      --text: #cdd6f4;
+      --text-muted: #a6adc8;
+      --done-text: #6c7086;
+      --green: #a6e3a1;
+      --red: #f38ba8;
+      --yellow: #f9e2af;
+      --purple: #cba6f7;
       --radius: 10px;
-      --shadow: 0 4px 24px rgba(0,0,0,0.6);
+      --shadow: 0 4px 24px rgba(0,0,0,0.4);
     }
 
     body {
@@ -56,7 +56,7 @@
     .nav-btn { padding: 6px 11px; }
     .nav-btn:hover { background: var(--border); }
     .add-btn { background: var(--accent); border-color: var(--accent); color: #fff; padding: 7px 16px; font-weight: 600; }
-    .add-btn:hover { background: #a8007a; }
+    .add-btn:hover { background: #6a9de8; }
 
     /* ── Sync indicator ── */
     .sync-dot {
@@ -105,7 +105,7 @@
       flex-shrink: 0;
       transition: border-color 0.15s, background 0.15s;
     }
-    .ongoing-card:hover { background: #3a1a2e; }
+    .ongoing-card:hover { background: #3a3a54; }
     .ongoing-card.active-now { border-color: var(--green); background: rgba(74,222,128,0.06); }
     .ongoing-card.active-now:hover { background: rgba(74,222,128,0.1); }
     .ongoing-card.done { opacity: 0.5; }
@@ -172,7 +172,7 @@
     .task-card.done .task-title { text-decoration: line-through; color: var(--done-text); }
     .task-card.dragging, .ongoing-card.dragging { opacity: 0.3; cursor: grabbing; }
 
-    .column-body.drag-over { background: rgba(207,0,144,0.07); outline: 2px dashed var(--accent-dim); outline-offset: -4px; border-radius: var(--radius); }
+    .column-body.drag-over { background: rgba(137,180,250,0.07); outline: 2px dashed var(--accent-dim); outline-offset: -4px; border-radius: var(--radius); }
     .ongoing-band-cards.drag-over { outline: 2px dashed var(--purple); outline-offset: 2px; border-radius: var(--radius); background: rgba(192,132,252,0.07); }
 
     .task-card.drop-before { border-top: 2px solid var(--accent); margin-top: -1px; }
@@ -215,7 +215,7 @@
       font-size: 10px; font-weight: 700; text-transform: uppercase;
       letter-spacing: 0.5px; padding: 2px 6px; border-radius: 4px;
     }
-    .status-in-progress { background: rgba(207,0,144,0.14); color: var(--accent); }
+    .status-in-progress { background: rgba(137,180,250,0.15); color: var(--accent); }
     .status-in-review   { background: rgba(251,191,36,0.15);  color: var(--yellow); }
     .status-blocked     { background: rgba(248,113,113,0.15); color: var(--red); }
 
@@ -471,7 +471,7 @@
       border-radius: 8px; padding: 8px 18px; cursor: pointer;
       font-size: 14px; font-weight: 600;
     }
-    .btn-save:hover { background: #a8007a; }
+    .btn-save:hover { background: #6a9de8; }
     .btn-delete {
       background: rgba(248,113,113,0.12); border: 1px solid rgba(248,113,113,0.25);
       color: var(--red); border-radius: 8px; padding: 8px 16px;
