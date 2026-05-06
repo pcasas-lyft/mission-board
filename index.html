@@ -210,6 +210,34 @@
     .subtask-progress.all-done { border-color: var(--green); color: var(--green); background: rgba(74,222,128,0.08); }
     .has-notes-icon { font-size: 11px; color: var(--text-muted); }
 
+    /* ── Status left-border on cards ── */
+    .task-card[data-status="in-progress"]    { border-left: 3px solid var(--accent); }
+    .task-card[data-status="in-review"]      { border-left: 3px solid var(--yellow); }
+    .task-card[data-status="blocked"]        { border-left: 3px solid var(--red); }
+    .ongoing-card[data-status="in-progress"] { border-left: 3px solid var(--accent); }
+    .ongoing-card[data-status="in-review"]   { border-left: 3px solid var(--yellow); }
+    .ongoing-card[data-status="blocked"]     { border-left: 3px solid var(--red); }
+
+    /* ── Done-tasks toggle ── */
+    .done-toggle-btn {
+      width: 100%; background: transparent; border: 1px dashed var(--border);
+      border-radius: var(--radius); color: var(--done-text); font-size: 11px;
+      padding: 5px; cursor: pointer; text-align: center; transition: all 0.15s;
+      margin-top: 2px; font-family: inherit;
+    }
+    .done-toggle-btn:hover { border-color: var(--text-muted); color: var(--text-muted); }
+
+    /* ── Modal details toggle ── */
+    .details-toggle {
+      display: flex; align-items: center; gap: 5px;
+      background: none; border: none; color: var(--text-muted);
+      font-size: 12px; padding: 0 0 14px; cursor: pointer;
+      font-family: inherit; width: 100%; text-align: left; line-height: 1;
+    }
+    .details-toggle:hover { color: var(--accent); }
+    .details-toggle .arr { font-size: 9px; transition: transform 0.15s; display: inline-block; }
+    .details-toggle.open .arr { transform: rotate(90deg); }
+
     /* ── Status badges ── */
     .status-badge {
       font-size: 10px; font-weight: 700; text-transform: uppercase;
@@ -825,6 +853,12 @@
       <input type="text" id="taskTitle" placeholder="What needs to get done?" />
     </div>
 
+    <button type="button" class="details-toggle" id="detailsToggle">
+      <span class="arr">▶</span> Details
+    </button>
+
+    <div id="detailsSection">
+
     <div id="ongoingToggle" class="toggle-row">
       <div class="toggle-knob"></div>
       <div>
@@ -930,6 +964,8 @@
       </div>
       <div class="log-timeline" id="logTimeline"></div>
     </div>
+
+    </div><!-- /#detailsSection -->
 
     <div class="modal-actions">
       <button class="btn-delete" id="deleteTaskBtn" style="display:none">Delete Task</button>
@@ -1144,6 +1180,25 @@
     });
   }
 
+  function makeDoneToggle(count, renderItems) {
+    const wrapper = document.createElement('div');
+    const btn = document.createElement('button');
+    btn.className = 'done-toggle-btn';
+    btn.textContent = `↓ ${count} done`;
+    const container = document.createElement('div');
+    container.style.display = 'none';
+    let rendered = false;
+    btn.addEventListener('click', () => {
+      const hidden = container.style.display === 'none';
+      if (hidden && !rendered) { renderItems(container); rendered = true; }
+      container.style.display = hidden ? '' : 'none';
+      btn.textContent = hidden ? '↑ Hide done' : `↓ ${count} done`;
+    });
+    wrapper.appendChild(btn);
+    wrapper.appendChild(container);
+    return wrapper;
+  }
+
   function renderBoard() {
     renderOngoingBand();
 
@@ -1184,11 +1239,23 @@
       body.className = 'column-body';
       addDropZone(body, dateStr);
 
-      if (dayTasks.length === 0 && scheduledSubs.length === 0) {
+      const activeDayTasks = past ? dayTasks : dayTasks.filter(t => !t.done);
+      const doneDayTasks   = past ? [] : dayTasks.filter(t => t.done);
+      const activeSubs     = past ? scheduledSubs : scheduledSubs.filter(({subtask}) => !subtask.done);
+      const doneSubs       = past ? [] : scheduledSubs.filter(({subtask}) => subtask.done);
+      const doneCount      = doneDayTasks.length + doneSubs.length;
+
+      if (activeDayTasks.length === 0 && activeSubs.length === 0 && doneCount === 0) {
         body.innerHTML = '<div class="empty-col">No tasks</div>';
       } else {
-        dayTasks.forEach(t => body.appendChild(makeTaskCard(t)));
-        scheduledSubs.forEach(({subtask, parentTask}) => body.appendChild(makeSubtaskMiniCard(subtask, parentTask)));
+        activeDayTasks.forEach(t => body.appendChild(makeTaskCard(t)));
+        activeSubs.forEach(({subtask, parentTask}) => body.appendChild(makeSubtaskMiniCard(subtask, parentTask)));
+        if (doneCount > 0) {
+          body.appendChild(makeDoneToggle(doneCount, container => {
+            doneDayTasks.forEach(t => container.appendChild(makeTaskCard(t)));
+            doneSubs.forEach(({subtask, parentTask}) => container.appendChild(makeSubtaskMiniCard(subtask, parentTask)));
+          }));
+        }
       }
 
       const addBtn = makeAddBtn(() => openModal(null, dateStr));
@@ -1217,8 +1284,18 @@
     body.className = 'column-body';
     addDropZone(body, 'unscheduled');
 
-    if (unscheduled.length === 0) body.innerHTML = '<div class="empty-col">No tasks</div>';
-    else unscheduled.forEach(t => body.appendChild(makeTaskCard(t)));
+    const activeUnscheduled = unscheduled.filter(t => !t.done);
+    const doneUnscheduled   = unscheduled.filter(t => t.done);
+    if (activeUnscheduled.length === 0 && doneUnscheduled.length === 0) {
+      body.innerHTML = '<div class="empty-col">No tasks</div>';
+    } else {
+      activeUnscheduled.forEach(t => body.appendChild(makeTaskCard(t)));
+      if (doneUnscheduled.length > 0) {
+        body.appendChild(makeDoneToggle(doneUnscheduled.length, container => {
+          doneUnscheduled.forEach(t => container.appendChild(makeTaskCard(t)));
+        }));
+      }
+    }
 
     body.appendChild(makeAddBtn(() => openModal(null, 'unscheduled')));
     col.appendChild(hdr);
@@ -1309,6 +1386,7 @@
   function makeTaskCard(task) {
     const card = document.createElement('div');
     card.className = 'task-card' + (task.done ? ' done' : '');
+    card.dataset.status = task.status || 'todo';
 
     const { meta, extra } = buildMetaParts(task, false);
 
@@ -1358,6 +1436,7 @@
   function makeOngoingCard(task) {
     const card = document.createElement('div');
     card.className = 'ongoing-card' + (task.done ? ' done' : '') + (task.activeNow ? ' active-now' : '');
+    card.dataset.status = task.status || 'todo';
 
     const { meta, extra } = buildMetaParts(task, true);
 
@@ -1553,6 +1632,17 @@
       parentSelect.appendChild(opt);
     });
     parentRow.style.display = candidates.length ? '' : 'none';
+
+    // Details section: collapsed for new tasks, expanded for edits
+    const detailsSection = document.getElementById('detailsSection');
+    const detailsToggle  = document.getElementById('detailsToggle');
+    if (task) {
+      detailsSection.style.display = '';
+      detailsToggle.classList.add('open');
+    } else {
+      detailsSection.style.display = 'none';
+      detailsToggle.classList.remove('open');
+    }
 
     document.getElementById('modalOverlay').classList.add('open');
     setTimeout(() => document.getElementById('taskTitle').focus(), 50);
@@ -1886,6 +1976,14 @@
   document.getElementById('prevWeek').addEventListener('click', () => { weekOffset--; renderBoard(); });
   document.getElementById('nextWeek').addEventListener('click', () => { weekOffset++; renderBoard(); });
   document.getElementById('todayBtn').addEventListener('click', () => { weekOffset = 0; renderBoard(); });
+
+  document.getElementById('detailsToggle').addEventListener('click', () => {
+    const section = document.getElementById('detailsSection');
+    const btn     = document.getElementById('detailsToggle');
+    const open    = section.style.display !== 'none';
+    section.style.display = open ? 'none' : '';
+    btn.classList.toggle('open', !open);
+  });
 
   document.getElementById('ongoingToggle').addEventListener('click', () => {
     isOngoing = !isOngoing;
