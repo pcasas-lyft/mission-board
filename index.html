@@ -8,21 +8,21 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg: #0f1117;
-      --surface: #1a1d27;
-      --surface2: #22263a;
-      --border: #2e3347;
-      --accent: #6c8ef5;
-      --accent-dim: #3d4f8a;
-      --text: #e2e6f3;
-      --text-muted: #7b82a0;
-      --done-text: #4a5068;
+      --bg: #0d0d0f;
+      --surface: #171718;
+      --surface2: #1f1f22;
+      --border: #2e2e32;
+      --accent: #FF00BF;
+      --accent-dim: #99006e;
+      --text: #efefef;
+      --text-muted: #808086;
+      --done-text: #4a4a50;
       --green: #4ade80;
       --red: #f87171;
       --yellow: #fbbf24;
       --purple: #c084fc;
       --radius: 10px;
-      --shadow: 0 4px 24px rgba(0,0,0,0.4);
+      --shadow: 0 4px 24px rgba(0,0,0,0.55);
     }
 
     body {
@@ -56,7 +56,7 @@
     .nav-btn { padding: 6px 11px; }
     .nav-btn:hover { background: var(--border); }
     .add-btn { background: var(--accent); border-color: var(--accent); color: #fff; padding: 7px 16px; font-weight: 600; }
-    .add-btn:hover { background: #7b9df7; }
+    .add-btn:hover { background: #cc009a; }
 
     /* ── Sync indicator ── */
     .sync-dot {
@@ -105,7 +105,7 @@
       flex-shrink: 0;
       transition: border-color 0.15s, background 0.15s;
     }
-    .ongoing-card:hover { background: #2a2040; }
+    .ongoing-card:hover { background: #201620; }
     .ongoing-card.active-now { border-color: var(--green); background: rgba(74,222,128,0.06); }
     .ongoing-card.active-now:hover { background: rgba(74,222,128,0.1); }
     .ongoing-card.done { opacity: 0.5; }
@@ -172,7 +172,7 @@
     .task-card.done .task-title { text-decoration: line-through; color: var(--done-text); }
     .task-card.dragging, .ongoing-card.dragging { opacity: 0.3; cursor: grabbing; }
 
-    .column-body.drag-over { background: rgba(108,142,245,0.07); outline: 2px dashed var(--accent-dim); outline-offset: -4px; border-radius: var(--radius); }
+    .column-body.drag-over { background: rgba(255,0,191,0.05); outline: 2px dashed var(--accent-dim); outline-offset: -4px; border-radius: var(--radius); }
     .ongoing-band-cards.drag-over { outline: 2px dashed var(--purple); outline-offset: 2px; border-radius: var(--radius); background: rgba(192,132,252,0.07); }
 
     .task-card.drop-before { border-top: 2px solid var(--accent); margin-top: -1px; }
@@ -215,7 +215,7 @@
       font-size: 10px; font-weight: 700; text-transform: uppercase;
       letter-spacing: 0.5px; padding: 2px 6px; border-radius: 4px;
     }
-    .status-in-progress { background: rgba(108,142,245,0.15); color: var(--accent); }
+    .status-in-progress { background: rgba(255,0,191,0.12); color: var(--accent); }
     .status-in-review   { background: rgba(251,191,36,0.15);  color: var(--yellow); }
     .status-blocked     { background: rgba(248,113,113,0.15); color: var(--red); }
 
@@ -309,6 +309,46 @@
       flex: 1; word-break: break-word;
     }
     .card-st-text.checked { text-decoration: line-through; color: var(--done-text); }
+
+    /* ── Subtask mini-cards in day columns ── */
+    .subtask-mini-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent-dim);
+      border-radius: var(--radius);
+      padding: 7px 10px;
+      margin-bottom: 7px;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .subtask-mini-card:hover { border-color: var(--accent); background: var(--surface2); }
+    .subtask-mini-card:hover { border-left-color: var(--accent); }
+    .subtask-mini-card.done { opacity: 0.4; }
+    .subtask-mini-card.done .smc-text { text-decoration: line-through; color: var(--done-text); }
+    .smc-top { display: flex; align-items: flex-start; gap: 7px; }
+    .smc-checkbox {
+      width: 13px; height: 13px; border-radius: 3px;
+      border: 1.5px solid var(--accent-dim); background: transparent;
+      cursor: pointer; flex-shrink: 0; margin-top: 2px;
+      display: flex; align-items: center; justify-content: center;
+      transition: all 0.15s;
+    }
+    .subtask-mini-card.done .smc-checkbox { background: var(--green); border-color: var(--green); }
+    .subtask-mini-card.done .smc-checkbox svg { display: block; }
+    .smc-checkbox svg { display: none; }
+    .smc-content { flex: 1; min-width: 0; }
+    .smc-text { font-size: 12px; font-weight: 500; color: var(--text); line-height: 1.35; word-break: break-word; }
+    .smc-parent { font-size: 10px; color: var(--text-muted); margin-top: 3px; }
+
+    /* ── Day select in subtask list ── */
+    .st-day {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 5px; color: var(--text-muted); font-size: 11px;
+      padding: 2px 4px; cursor: pointer; outline: none; flex-shrink: 0;
+      font-family: inherit; max-width: 82px;
+    }
+    .st-day:focus { border-color: var(--accent); }
+    .st-day option { background: var(--surface2); }
 
     .col-add-btn {
       width: 100%; background: transparent; border: 1px dashed var(--border);
@@ -431,7 +471,7 @@
       border-radius: 8px; padding: 8px 18px; cursor: pointer;
       font-size: 14px; font-weight: 600;
     }
-    .btn-save:hover { background: #7b9df7; }
+    .btn-save:hover { background: #cc009a; }
     .btn-delete {
       background: rgba(248,113,113,0.12); border: 1px solid rgba(248,113,113,0.25);
       color: var(--red); border-radius: 8px; padding: 8px 16px;
@@ -892,7 +932,19 @@
       const past = isPast(date) && !isToday(date);
       const dayTasks = tasks.filter(t => !t.ongoing && t.day === dateStr)
         .sort((a, b) => (a.done ? 1 : 0) - (b.done ? 1 : 0));
-      const pending = dayTasks.filter(t => !t.done).length;
+
+      // Scheduled subtasks from ongoing tasks for this day
+      const scheduledSubs = [];
+      tasks.filter(t => t.ongoing && t.subtasks && t.subtasks.length).forEach(parentTask => {
+        parentTask.subtasks.forEach(st => {
+          if (st.day === dateStr) scheduledSubs.push({ subtask: st, parentTask });
+        });
+      });
+      scheduledSubs.sort((a, b) => (a.subtask.done ? 1 : 0) - (b.subtask.done ? 1 : 0));
+
+      const pendingTasks = dayTasks.filter(t => !t.done).length;
+      const pendingSubs  = scheduledSubs.filter(({subtask}) => !subtask.done).length;
+      const pending = pendingTasks + pendingSubs;
 
       const col = document.createElement('div');
       col.className = 'column' + (past ? ' past' : '');
@@ -908,8 +960,12 @@
       body.className = 'column-body';
       addDropZone(body, dateStr);
 
-      if (dayTasks.length === 0) body.innerHTML = '<div class="empty-col">No tasks</div>';
-      else dayTasks.forEach(t => body.appendChild(makeTaskCard(t)));
+      if (dayTasks.length === 0 && scheduledSubs.length === 0) {
+        body.innerHTML = '<div class="empty-col">No tasks</div>';
+      } else {
+        dayTasks.forEach(t => body.appendChild(makeTaskCard(t)));
+        scheduledSubs.forEach(({subtask, parentTask}) => body.appendChild(makeSubtaskMiniCard(subtask, parentTask)));
+      }
 
       const addBtn = makeAddBtn(() => openModal(null, dateStr));
       body.appendChild(addBtn);
@@ -1114,6 +1170,30 @@
     return card;
   }
 
+  function makeSubtaskMiniCard(subtask, parentTask) {
+    const card = document.createElement('div');
+    card.className = 'subtask-mini-card' + (subtask.done ? ' done' : '');
+    card.innerHTML = `
+      <div class="smc-top">
+        <div class="smc-checkbox">${CHECK_SVG}</div>
+        <div class="smc-content">
+          <div class="smc-text">${escHtml(subtask.text)}</div>
+          <div class="smc-parent">↳ ${escHtml(parentTask.title)}</div>
+        </div>
+      </div>`;
+
+    card.querySelector('.smc-checkbox').addEventListener('click', e => {
+      e.stopPropagation();
+      subtask.done = !subtask.done;
+      parentTask.lastUpdated = new Date().toISOString();
+      saveTasks();
+      renderBoard();
+    });
+
+    card.addEventListener('click', () => openModal(parentTask));
+    return card;
+  }
+
   function buildMetaParts(task, showProgress) {
     let meta = '';
 
@@ -1270,12 +1350,21 @@
   function renderModalSubtasks() {
     const list = document.getElementById('subtaskList');
     list.innerHTML = '';
+    const weekDates = getWeekDates(weekOffset);
     modalSubtasks.forEach((st, i) => {
+      const dayOptions = `<option value="">—</option>` +
+        weekDates.map(d => {
+          const ds = formatDate(d);
+          const label = d.toLocaleDateString('en-US', { weekday: 'short', month: 'numeric', day: 'numeric' });
+          return `<option value="${ds}"${st.day === ds ? ' selected' : ''}>${label}</option>`;
+        }).join('');
+
       const item = document.createElement('div');
       item.className = 'subtask-item' + (st.done ? ' done-item' : '');
       item.innerHTML = `
         <input type="checkbox" class="st-check" ${st.done ? 'checked' : ''} />
         <input type="text" class="st-text" value="${escHtml(st.text)}" placeholder="Subtask..." />
+        <select class="st-day" title="Schedule to a day of the week">${dayOptions}</select>
         <button class="st-del" title="Remove">×</button>`;
 
       item.querySelector('.st-check').addEventListener('change', e => {
@@ -1287,6 +1376,13 @@
       });
       item.querySelector('.st-text').addEventListener('input', e => {
         modalSubtasks[i].text = e.target.value;
+      });
+      item.querySelector('.st-day').addEventListener('change', e => {
+        if (e.target.value) {
+          modalSubtasks[i].day = e.target.value;
+        } else {
+          delete modalSubtasks[i].day;
+        }
       });
       item.querySelector('.st-del').addEventListener('click', () => {
         modalSubtasks.splice(i, 1);
