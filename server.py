@@ -474,9 +474,46 @@ class Handler(SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(b'{"ok":true}')
 
+    def do_DELETE(self):
+        # DELETE /tasks/<id> — atomically remove a single task
+        if self.path.startswith('/tasks/'):
+            task_id = self.path[len('/tasks/'):]
+            if not re.match(r'^[a-zA-Z0-9_-]+$', task_id):
+                self.send_response(400)
+                self.send_header('Content-Type', 'application/json')
+                self._cors(); self.end_headers()
+                self.wfile.write(b'{"error":"invalid task id"}')
+                return
+
+            with _file_lock:
+                tasks = []
+                if os.path.exists(TASKS_FILE):
+                    with open(TASKS_FILE, 'r') as f:
+                        tasks = json.load(f)
+
+                original_len = len(tasks)
+                tasks = [t for t in tasks if t.get('id') != task_id]
+
+                if len(tasks) == original_len:
+                    self.send_response(404)
+                    self.send_header('Content-Type', 'application/json')
+                    self._cors(); self.end_headers()
+                    self.wfile.write(b'{"error":"task not found"}')
+                    return
+
+                with open(TASKS_FILE, 'w') as f:
+                    json.dump(tasks, f)
+
+            broadcast('update')
+            regen_docs_async()
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self._cors(); self.end_headers()
+            self.wfile.write(b'{"ok":true}')
+
     def _cors(self):
         self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Access-Control-Allow-Methods', 'GET, POST, PATCH, OPTIONS')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS')
         self.send_header('Access-Control-Allow-Headers', 'Content-Type')
 
     def log_message(self, *args):

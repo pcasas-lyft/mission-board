@@ -1603,17 +1603,34 @@
   let _undoState = null;
   let _undoTimer = null;
 
-  function deleteTask() {
+  async function deleteTask() {
     if (!editingId) return;
     const idx = tasks.findIndex(t => t.id === editingId);
     if (idx === -1) return;
     const deleted = tasks[idx];
+    const deletedId = editingId;
+
+    // Optimistic local update first so the UI feels instant
     _undoState = { task: deleted, index: idx };
     tasks.splice(idx, 1);
-    saveTasks();
     closeModal();
     renderBoard();
     showUndoToast(`Deleted "<strong>${escHtml(deleted.title)}</strong>"`);
+
+    // Atomic server-side delete — no full-array POST needed
+    try {
+      _sseIgnoreNext = true;
+      const res = await fetch(`/tasks/${deletedId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('delete failed');
+      setSyncState('saved');
+    } catch {
+      // Server rejected it — roll back the optimistic update
+      tasks.splice(idx, 0, deleted);
+      _undoState = null;
+      hideUndoToast();
+      renderBoard();
+      setSyncState('error');
+    }
   }
 
   function showUndoToast(msg) {
@@ -1629,14 +1646,30 @@
     _undoState = null;
   }
 
-  document.getElementById('undoBtn').addEventListener('click', () => {
+  document.getElementById('undoBtn').addEventListener('click', async () => {
     if (!_undoState) return;
     clearTimeout(_undoTimer);
-    tasks.splice(_undoState.index, 0, _undoState.task);
+    const { task, index } = _undoState;
     _undoState = null;
-    saveTasks();
-    renderBoard();
     hideUndoToast();
+
+    // Optimistically restore at the original position
+    tasks.splice(index, 0, task);
+    renderBoard();
+
+    // Re-create via /tasks/new — preserves all fields, server fills defaults only
+    try {
+      _sseIgnoreNext = true;
+      const res = await fetch('/tasks/new', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(task),
+      });
+      if (!res.ok) throw new Error('restore failed');
+      setSyncState('saved');
+    } catch {
+      setSyncState('error');
+    }
   });
 
   function dayIndexFromDateStr(dateStr) {

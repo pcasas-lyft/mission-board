@@ -4,6 +4,10 @@ WorktreeCreate hook — reads the branch name from stdin JSON,
 extracts a task ID using the naming convention, and PATCHes
 that task to in-progress + sets claimedBy.
 
+Also writes a temp file (/tmp/claude-task-<branch>.id) so that
+on-stop.sh can reliably identify which task this session owned
+without guessing from branch names.
+
 Branch naming convention:
   feat/<task-id>-description   e.g. feat/t4-tcs-mcp     → task id: t4
   fix/<task-id>-description    e.g. fix/1746001234-bug   → task id: 1746001234
@@ -13,10 +17,14 @@ Fallback for user-prefixed branches (e.g. alice/promo-banner-redesign):
 
 If the branch doesn't match or the task isn't found, exits silently.
 """
-import json, sys, re, subprocess, urllib.request, urllib.error
+import json, sys, re, os, subprocess, urllib.request, urllib.error
 from datetime import datetime, timezone
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from lib import find_task_by_slug, session_task_file
+
 BASE_URL = 'http://localhost:3456'
+
 
 def get_branch(data):
     for key in ('branch', 'worktree_branch'):
@@ -36,6 +44,7 @@ def get_branch(data):
         pass
     return None
 
+
 def extract_task_id(branch):
     # Take the last path segment, grab up to the first '-'
     # feat/t4-tcs-mcp → "t4-tcs-mcp" → "t4"
@@ -43,33 +52,6 @@ def extract_task_id(branch):
     m = re.match(r'^([a-zA-Z0-9]+)(?:-|$)', segment)
     return m.group(1) if m else None
 
-def slug_words(branch):
-    """Extract significant words (4+ chars) from the branch description segment."""
-    segment = branch.split('/')[-1]
-    return [w.lower() for w in segment.split('-') if len(w) >= 4]
-
-def slug_match_score(words, title):
-    title_lower = title.lower()
-    return sum(1 for w in words if w in title_lower)
-
-def find_task_by_slug(tasks, branch):
-    """Return the best-matching active task by slug, only if match is confident and unambiguous."""
-    words = slug_words(branch)
-    if len(words) < 2:
-        return None
-
-    scored = [(slug_match_score(words, t.get('title', '')), t)
-              for t in tasks if not t.get('done')]
-    scored.sort(key=lambda x: -x[0])
-
-    if not scored or scored[0][0] < 2:
-        return None
-
-    # Reject ambiguous matches
-    if len(scored) > 1 and scored[0][0] == scored[1][0]:
-        return None
-
-    return scored[0][1]
 
 def main():
     try:
@@ -123,6 +105,13 @@ def main():
     except Exception:
         sys.exit(0)
 
+    # Write the session task file so on-stop.sh can find this task reliably
+    try:
+        with open(session_task_file(branch), 'w') as f:
+            f.write(task_id)
+    except Exception:
+        pass  # non-fatal — notification will fall back to slug matching
+
     print(json.dumps({
         'systemMessage': (
             f'Auto-claimed task "{task["title"]}" (id: {task_id}) '
@@ -130,6 +119,7 @@ def main():
             f'Update it via PATCH {BASE_URL}/tasks/{task_id} when done.'
         )
     }))
+
 
 if __name__ == '__main__':
     main()
