@@ -603,6 +603,69 @@
     }
     .update-actions { display: flex; gap: 8px; justify-content: flex-end; }
 
+    /* ── Multi-PR list in modal ── */
+    .pr-link-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 4px; }
+    .pr-link-row { display: flex; align-items: center; gap: 6px; }
+    .pr-link-row input { flex: 1; }
+    .pr-link-label {
+      font-size: 11px; color: var(--accent); white-space: nowrap;
+      overflow: hidden; text-overflow: ellipsis; max-width: 140px; flex-shrink: 0;
+    }
+    .pr-link-remove {
+      background: none; border: none; color: var(--text-muted); cursor: pointer;
+      font-size: 14px; padding: 2px 5px; border-radius: 4px; flex-shrink: 0; line-height: 1;
+    }
+    .pr-link-remove:hover { color: var(--red); background: var(--surface); }
+
+    /* ── Specs list + Archive overlays ── */
+    .list-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.6); z-index: 300;
+      align-items: center; justify-content: center;
+    }
+    .list-overlay.open { display: flex; }
+    .list-modal {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 14px; width: 520px; max-width: 95vw; max-height: 80vh;
+      box-shadow: var(--shadow); display: flex; flex-direction: column;
+    }
+    .list-modal-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+    }
+    .list-modal-header h2 { font-size: 15px; font-weight: 700; }
+    .list-modal-body { overflow-y: auto; padding: 12px 0; }
+    .list-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 20px; cursor: pointer; transition: background 0.1s;
+    }
+    .list-item:hover { background: var(--surface2); }
+    .list-item-icon { font-size: 16px; flex-shrink: 0; }
+    .list-item-name { font-size: 14px; color: var(--text); flex: 1; }
+    .list-item-meta { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
+    .archive-item {
+      padding: 12px 20px; border-bottom: 1px solid var(--border);
+    }
+    .archive-item:last-child { border-bottom: none; }
+    .archive-title {
+      font-size: 13px; font-weight: 600; color: var(--done-text);
+      text-decoration: line-through; margin-bottom: 4px;
+    }
+    .archive-meta { font-size: 11px; color: var(--text-muted); margin-bottom: 4px; }
+    .archive-notes { font-size: 12px; color: var(--text-muted); font-style: italic; }
+
+    /* ── Board footer ── */
+    .board-footer {
+      text-align: center; padding: 20px 0 32px;
+      font-size: 12px; color: var(--text-muted);
+    }
+    .board-footer button {
+      background: none; border: none; color: var(--text-muted);
+      cursor: pointer; font-size: 12px; text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+    .board-footer button:hover { color: var(--text); }
+
     /* ── Spec panel ── */
     .spec-panel-overlay {
       display: none; position: fixed; inset: 0;
@@ -678,6 +741,7 @@
     <button class="jira-config-btn" id="jiraConfigBtn" title="Jira settings">
       <span class="jira-dot" id="jiraDot"></span>Jira
     </button>
+    <button class="update-btn" id="specsBtn" title="Browse spec files">📋</button>
     <button class="add-btn" id="openAddModal">+ New Task</button>
   </div>
 </header>
@@ -725,6 +789,31 @@
 </div>
 
 <div class="board" id="board"></div>
+<div class="board-footer">
+  <button id="archiveBtn">📦 View archive</button>
+</div>
+
+<!-- Specs list overlay -->
+<div class="list-overlay" id="specsOverlay">
+  <div class="list-modal">
+    <div class="list-modal-header">
+      <h2>📋 Specs</h2>
+      <button class="spec-panel-close" id="specsClose">✕</button>
+    </div>
+    <div class="list-modal-body" id="specsList"></div>
+  </div>
+</div>
+
+<!-- Archive overlay -->
+<div class="list-overlay" id="archiveOverlay">
+  <div class="list-modal">
+    <div class="list-modal-header">
+      <h2>📦 Archive</h2>
+      <button class="spec-panel-close" id="archiveClose">✕</button>
+    </div>
+    <div class="list-modal-body" id="archiveList"></div>
+  </div>
+</div>
 
 <!-- Task Modal -->
 <div class="modal-overlay" id="modalOverlay">
@@ -781,13 +870,9 @@
         </select>
       </div>
       <div class="form-group">
-        <label>PR / Branch</label>
-        <div style="display:flex;gap:6px;align-items:center">
-          <input type="text" id="taskPrLink" placeholder="https://github.com/..." style="flex:1" />
-          <a id="prLinkOpen" href="#" target="_blank" rel="noopener"
-             style="display:none;font-size:13px;color:var(--accent);padding:0 4px;text-decoration:none"
-             title="Open PR">↗</a>
-        </div>
+        <label>Pull Requests</label>
+        <div class="pr-link-list" id="prLinkList"></div>
+        <button type="button" class="add-subtask-btn" id="addPrLinkBtn">+ Add PR</button>
       </div>
     </div>
 
@@ -896,13 +981,34 @@
     }
   }
 
+  function prLabel(url) {
+    if (!url) return '';
+    try {
+      const m = url.match(/github\.com\/[^/]+\/([^/]+)\/pull\/(\d+)/i);
+      if (m) return `${m[1]} #${m[2]}`;
+      const u = new URL(url);
+      return u.hostname.replace('www.', '') + (u.pathname.length > 1 ? u.pathname : '');
+    } catch { return url.length > 32 ? url.slice(0, 30) + '…' : url; }
+  }
+
   function migrateTasks(raw) {
     return (raw || INITIAL_TASKS).map(t => {
-      const base = { ongoing: false, subtasks: [], activeNow: false, blockedOn: '', prLink: '', noteHistory: [], claimedBy: '', ...t };
-      // Derive status from done if not present
+      const base = { ongoing: false, subtasks: [], activeNow: false, blockedOn: '',
+                     prLink: '', prLinks: [], noteHistory: [], claimedBy: '', ...t };
       if (!base.status) base.status = base.done ? 'done' : 'todo';
-      // Keep done in sync with status
       base.done = base.status === 'done';
+      // Migrate legacy prLink string into prLinks array
+      if (base.prLink && base.prLink.trim()) {
+        const url = base.prLink.trim();
+        if (!base.prLinks.some(p => p.url === url)) {
+          base.prLinks = [{ url, label: prLabel(url) }, ...base.prLinks];
+        }
+        base.prLink = '';
+      }
+      // Ensure all entries are well-formed and labelled
+      base.prLinks = base.prLinks
+        .filter(p => p && p.url && p.url.trim())
+        .map(p => ({ url: p.url.trim(), label: p.label || prLabel(p.url) }));
       return base;
     });
   }
@@ -1332,10 +1438,12 @@
         meta += `<button class="pr-link" style="border:none;cursor:pointer;background:none" onclick="openSpecPanel('${escHtml(sl)}');event.stopPropagation()">📋 Spec</button>`;
       }
     }
-    if (task.prLink && task.prLink.trim()) {
-      const safeUrl = /^https?:\/\//i.test(task.prLink.trim()) ? task.prLink.trim() : null;
-      if (safeUrl) meta += `<a class="pr-link" href="${escHtml(safeUrl)}" target="_blank" rel="noopener" title="${escHtml(safeUrl)}">🔗 PR</a>`;
-    }
+    const prs = (task.prLinks && task.prLinks.length)
+      ? task.prLinks
+      : (task.prLink ? [{ url: task.prLink, label: prLabel(task.prLink) }] : []);
+    prs.filter(p => /^https?:\/\//i.test(p.url)).forEach(p => {
+      meta += `<a class="pr-link" href="${escHtml(p.url)}" target="_blank" rel="noopener" title="${escHtml(p.url)}">${escHtml(p.label || '🔗 PR')}</a>`;
+    });
     if (task.jiraKey && task.jiraKey.trim()) {
       const jiraBase = /^https?:\/\//i.test(window._jiraBaseUrl || '') ? window._jiraBaseUrl : '';
       if (jiraBase) {
@@ -1377,10 +1485,10 @@
     document.getElementById('taskNotes').value = task ? (task.notes || '') : '';
     document.getElementById('taskPriority').value = task ? (task.priority || 'none') : 'none';
     document.getElementById('taskStatus').value = task ? (task.status || 'todo') : 'todo';
-    document.getElementById('taskPrLink').value = task ? (task.prLink || '') : '';
+    modalPrLinks = task ? [...(task.prLinks || [])] : [];
+    renderModalPrLinks();
     document.getElementById('taskSpecLink').value = task ? (task.specLink || '') : '';
     document.getElementById('taskBlockedOn').value = task ? (task.blockedOn || '') : '';
-    updatePrLinkBtn();
     updateSpecLinkBtn();
     document.getElementById('deleteTaskBtn').style.display = task ? '' : 'none';
 
@@ -1584,7 +1692,9 @@
     }
 
     const status   = document.getElementById('taskStatus').value;
-    const prLink   = document.getElementById('taskPrLink').value.trim();
+    const prLinks  = modalPrLinks.filter(p => p.url && p.url.trim())
+                       .map(p => ({ url: p.url.trim(), label: p.label || prLabel(p.url.trim()) }));
+    const prLink   = prLinks.length ? prLinks[0].url : ''; // kept for agent backward-compat
     const specLink = document.getElementById('taskSpecLink').value.trim();
     const blockedOn = status === 'blocked' ? document.getElementById('taskBlockedOn').value.trim() : '';
     const jiraKey  = document.getElementById('taskJiraKey').value.trim().toUpperCase();
@@ -1624,7 +1734,7 @@
         const prev = tasks[idx];
         const patch = {
           title, day: dayStr, priority, notes, ongoing: isOngoing, subtasks,
-          status, done, prLink, specLink, blockedOn, jiraKey, log: modalLog,
+          status, done, prLink, prLinks, specLink, blockedOn, jiraKey, log: modalLog,
           claimedBy: status === 'done' ? '' : prev.claimedBy,
           lastUpdated: new Date().toISOString(),
         };
@@ -1646,7 +1756,7 @@
         id: `tmp-${Date.now()}`,   // optimistic id — replaced by server response
         title, day: dayStr, priority, notes,
         ongoing: isOngoing, subtasks,
-        status, done, prLink, specLink, blockedOn, jiraKey, log: modalLog,
+        status, done, prLink, prLinks, specLink, blockedOn, jiraKey, log: modalLog,
         createdAt: new Date().toISOString(),
         lastUpdated: new Date().toISOString(),
       };
@@ -1769,15 +1879,36 @@
   document.getElementById('taskStatus').addEventListener('change', updateBlockedOnVisibility);
 
   // PR link open button — show when there's a URL, update href as you type
-  const prLinkInput = document.getElementById('taskPrLink');
-  const prLinkOpen  = document.getElementById('prLinkOpen');
-  function updatePrLinkBtn() {
-    const url = prLinkInput.value.trim();
-    const show = url.startsWith('http');
-    prLinkOpen.style.display = show ? '' : 'none';
-    if (show) prLinkOpen.href = url;
+  let modalPrLinks = [];
+
+  function renderModalPrLinks() {
+    const list = document.getElementById('prLinkList');
+    if (!modalPrLinks.length) { list.innerHTML = ''; return; }
+    list.innerHTML = modalPrLinks.map((p, i) => `
+      <div class="pr-link-row" data-i="${i}">
+        <input class="pr-url-input" type="text" placeholder="https://github.com/…" value="${escHtml(p.url)}" />
+        <span class="pr-link-label">${escHtml(p.label || prLabel(p.url))}</span>
+        <button class="pr-link-remove" type="button" title="Remove">✕</button>
+      </div>`).join('');
+    list.querySelectorAll('.pr-url-input').forEach((input, i) => {
+      input.addEventListener('input', e => {
+        modalPrLinks[i].url = e.target.value;
+        modalPrLinks[i].label = prLabel(e.target.value.trim());
+        const lbl = input.closest('.pr-link-row').querySelector('.pr-link-label');
+        lbl.textContent = modalPrLinks[i].label;
+      });
+    });
+    list.querySelectorAll('.pr-link-remove').forEach((btn, i) => {
+      btn.addEventListener('click', () => { modalPrLinks.splice(i, 1); renderModalPrLinks(); });
+    });
   }
-  prLinkInput.addEventListener('input', updatePrLinkBtn);
+
+  document.getElementById('addPrLinkBtn').addEventListener('click', () => {
+    modalPrLinks.push({ url: '', label: '' });
+    renderModalPrLinks();
+    const inputs = document.querySelectorAll('.pr-url-input');
+    if (inputs.length) inputs[inputs.length - 1].focus();
+  });
 
   const specLinkInput = document.getElementById('taskSpecLink');
   const specLinkOpen  = document.getElementById('specLinkOpen');
@@ -1982,6 +2113,77 @@
 
   updateCloseBtn.addEventListener('click', () => updateOverlay.classList.remove('open'));
   updateOverlay.addEventListener('click', e => { if (e.target === updateOverlay) updateOverlay.classList.remove('open'); });
+
+  // ── Specs list ──────────────────────────────────────────────
+  const specsOverlay = document.getElementById('specsOverlay');
+  document.getElementById('specsBtn').addEventListener('click', async () => {
+    const list = document.getElementById('specsList');
+    list.innerHTML = '<div style="padding:20px;color:var(--text-muted)">Loading…</div>';
+    specsOverlay.classList.add('open');
+    try {
+      const files = await fetch('/specs').then(r => r.json());
+      if (!files.length) {
+        list.innerHTML = '<div style="padding:20px;color:var(--text-muted)">No spec files yet.<br>Create .md files in /Users/pcasas/src/specs/</div>';
+        return;
+      }
+      list.innerHTML = files.map(f => `
+        <div class="list-item" data-file="${escHtml(f)}">
+          <span class="list-item-icon">📄</span>
+          <span class="list-item-name">${escHtml(f)}</span>
+        </div>`).join('');
+      list.querySelectorAll('.list-item').forEach(el => {
+        el.addEventListener('click', () => {
+          specsOverlay.classList.remove('open');
+          openSpecPanel(el.dataset.file);
+        });
+      });
+    } catch (e) {
+      list.innerHTML = `<div style="padding:20px;color:var(--red)">Error: ${escHtml(e.message)}</div>`;
+    }
+  });
+  document.getElementById('specsClose').addEventListener('click', () => specsOverlay.classList.remove('open'));
+  specsOverlay.addEventListener('click', e => { if (e.target === specsOverlay) specsOverlay.classList.remove('open'); });
+
+  // ── Archive ─────────────────────────────────────────────────
+  function fmtArchiveDate(iso) {
+    if (!iso) return '';
+    try { const d = new Date(iso); return d.toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' }); }
+    catch { return ''; }
+  }
+
+  const archiveOverlay = document.getElementById('archiveOverlay');
+  document.getElementById('archiveBtn').addEventListener('click', async () => {
+    const list = document.getElementById('archiveList');
+    list.innerHTML = '<div style="padding:20px;color:var(--text-muted)">Loading…</div>';
+    archiveOverlay.classList.add('open');
+    try {
+      const archived = await fetch('/archive').then(r => r.json());
+      if (!archived.length) {
+        list.innerHTML = '<div style="padding:20px;color:var(--text-muted)">Archive is empty — completed tasks appear here after 3 days.</div>';
+        return;
+      }
+      const sorted = [...archived].sort((a, b) =>
+        (b.lastUpdated || b.createdAt || '').localeCompare(a.lastUpdated || a.createdAt || ''));
+      list.innerHTML = sorted.map(t => {
+        const date = fmtArchiveDate(t.lastUpdated || t.createdAt);
+        const prs = (t.prLinks && t.prLinks.length) ? t.prLinks
+          : (t.prLink ? [{ url: t.prLink, label: prLabel(t.prLink) }] : []);
+        const prHtml = prs.filter(p => /^https?:\/\//i.test(p.url))
+          .map(p => `<a href="${escHtml(p.url)}" target="_blank" rel="noopener" style="color:var(--accent);font-size:11px">${escHtml(p.label || 'PR')}</a>`)
+          .join(' · ');
+        const notes = (t.notes || '').trim().split('\n')[0];
+        return `<div class="archive-item">
+          <div class="archive-title">${escHtml(t.title)}</div>
+          <div class="archive-meta">${date}${prHtml ? ' · ' + prHtml : ''}</div>
+          ${notes ? `<div class="archive-notes">${escHtml(notes)}</div>` : ''}
+        </div>`;
+      }).join('');
+    } catch (e) {
+      list.innerHTML = `<div style="padding:20px;color:var(--red)">Error: ${escHtml(e.message)}</div>`;
+    }
+  });
+  document.getElementById('archiveClose').addEventListener('click', () => archiveOverlay.classList.remove('open'));
+  archiveOverlay.addEventListener('click', e => { if (e.target === archiveOverlay) archiveOverlay.classList.remove('open'); });
 
   // ── Spec panel ──────────────────────────────────────────────
   const specPanel   = document.getElementById('specPanel');

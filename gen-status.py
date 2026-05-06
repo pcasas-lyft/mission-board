@@ -51,7 +51,14 @@ def task_line(t, show_day=False, jira_base=''):
             parts.append(f"· `{t['jiraKey']}`")
     if t.get('specLink'):
         parts.append(f"· [📋 Spec]({t['specLink']})")
-    if t.get('prLink'):
+    pr_links = t.get('prLinks') or []
+    if pr_links:
+        for pl in pr_links:
+            url = pl.get('url', '').strip()
+            if url:
+                label = pl.get('label') or 'PR'
+                parts.append(f"· [{label}]({url})")
+    elif t.get('prLink'):
         parts.append(f"· [PR]({t['prLink']})")
     if t.get('claimedBy'):
         parts.append(f"· 🔒 `{t['claimedBy']}`")

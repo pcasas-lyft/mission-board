@@ -8,6 +8,7 @@ TASKS_FILE        = os.path.join(INSTALL_DIR, 'tasks.json')
 JIRA_CONFIG_FILE  = os.path.join(INSTALL_DIR, 'jira-config.json')
 JIRA_DEFAULT_URL  = ''
 SPECS_DIR         = os.path.normpath(os.path.join(INSTALL_DIR, '..', 'specs'))
+ARCHIVE_FILE      = os.path.join(INSTALL_DIR, 'tasks-archive.json')
 
 # SSE: list of per-client queues
 _clients = []
@@ -154,6 +155,18 @@ class Handler(SimpleHTTPRequestHandler):
                 self._cors()
                 self.end_headers()
                 self.wfile.write(json.dumps({'error': str(e)}).encode())
+
+        elif self.path == '/archive':
+            data = b'[]'
+            with _file_lock:
+                if os.path.exists(ARCHIVE_FILE):
+                    with open(ARCHIVE_FILE, 'rb') as f:
+                        data = f.read()
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self._cors()
+            self.end_headers()
+            self.wfile.write(data)
 
         elif self.path == '/specs':
             # List all .md files in the specs directory
