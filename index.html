@@ -1042,7 +1042,41 @@
       const stored = localStorage.getItem(STORAGE_KEY);
       tasks = migrateTasks(stored ? JSON.parse(stored) : null);
     }
+    rolloverPastTasks();
     renderBoard();
+  }
+
+  const ROLLOVER_DATE_KEY = 'lastRolloverDate';
+  let _rolloverUndo = null;  // { originals: [{id, day}] }
+
+  function rolloverPastTasks() {
+    const today = formatDate(new Date());
+    if (localStorage.getItem(ROLLOVER_DATE_KEY) === today) return;
+
+    const toRoll = tasks.filter(t =>
+      !t.done && !t.ongoing && t.day && t.day !== 'unscheduled' && t.day < today
+    );
+
+    localStorage.setItem(ROLLOVER_DATE_KEY, today);
+    if (toRoll.length === 0) return;
+
+    // Save originals for undo
+    _rolloverUndo = { originals: toRoll.map(t => ({ id: t.id, day: t.day })) };
+
+    // Update in memory and patch server
+    const now = new Date().toISOString();
+    toRoll.forEach(t => {
+      t.day = today;
+      t.lastUpdated = now;
+      fetch(`/tasks/${t.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ day: today, lastUpdated: now }),
+      }).catch(() => {});
+    });
+
+    const n = toRoll.length;
+    showUndoToast(`↩ ${n} unfinished task${n !== 1 ? 's' : ''} rolled over to today`);
   }
 
   // Debounced save — coalesces rapid calls (e.g. quick subtask toggles) into one request
@@ -1918,6 +1952,26 @@
   }
 
   document.getElementById('undoBtn').addEventListener('click', async () => {
+    // Rollover undo — restore tasks to their original days
+    if (_rolloverUndo) {
+      clearTimeout(_undoTimer);
+      const { originals } = _rolloverUndo;
+      _rolloverUndo = null;
+      hideUndoToast();
+      const now = new Date().toISOString();
+      originals.forEach(({ id, day }) => {
+        const t = tasks.find(t => t.id === id);
+        if (t) { t.day = day; t.lastUpdated = now; }
+        fetch(`/tasks/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ day, lastUpdated: now }),
+        }).catch(() => {});
+      });
+      localStorage.removeItem(ROLLOVER_DATE_KEY); // allow re-roll on next load
+      renderBoard();
+      return;
+    }
     if (!_undoState) return;
     clearTimeout(_undoTimer);
     const { task, index } = _undoState;
