@@ -60,6 +60,12 @@ def task_line(t, show_day=False, jira_base=''):
                 parts.append(f"· [{label}]({url})")
     elif t.get('prLink'):
         parts.append(f"· [PR]({t['prLink']})")
+    docs = t.get('docs') or []
+    for doc in docs:
+        url = doc.get('url', '').strip()
+        if url:
+            label = doc.get('title') or doc.get('type') or 'Doc'
+            parts.append(f"· [📎 {label}]({url})")
     if t.get('claimedBy'):
         parts.append(f"· 🔒 `{t['claimedBy']}`")
     line = ' '.join(parts)
@@ -181,8 +187,9 @@ def main():
         '{',
         '  "status": "in-review",',
         '  "notes": "Done: X\\nNext: Y",',
-        '  "prLink": "https://github.com/...",',
+        '  "prLinks": [{"url": "https://github.com/...", "label": "repo #N"}],',
         '  "blockedOn": "",',
+        '  "claimedBy": "",',
         '  "lastUpdated": "<ISO timestamp>"',
         '}',
         "```",

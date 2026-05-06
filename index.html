@@ -876,6 +876,11 @@
       </div>
     </div>
 
+    <div class="form-group" id="docsRow" style="display:none">
+      <label>Linked Docs <span style="font-size:11px;color:var(--text-muted);font-weight:400">— auto-added when agent fetches them</span></label>
+      <div class="pr-link-list" id="docLinkList"></div>
+    </div>
+
     <div class="form-group" id="blockedOnRow" style="display:none">
       <label>Blocked on</label>
       <input type="text" id="taskBlockedOn" placeholder="Who or what is blocking this?" />
@@ -994,7 +999,7 @@
   function migrateTasks(raw) {
     return (raw || INITIAL_TASKS).map(t => {
       const base = { ongoing: false, subtasks: [], activeNow: false, blockedOn: '',
-                     prLink: '', prLinks: [], noteHistory: [], claimedBy: '', ...t };
+                     prLink: '', prLinks: [], docs: [], noteHistory: [], claimedBy: '', ...t };
       if (!base.status) base.status = base.done ? 'done' : 'todo';
       base.done = base.status === 'done';
       // Migrate legacy prLink string into prLinks array
@@ -1444,6 +1449,14 @@
     prs.filter(p => /^https?:\/\//i.test(p.url)).forEach(p => {
       meta += `<a class="pr-link" href="${escHtml(p.url)}" target="_blank" rel="noopener" title="${escHtml(p.url)}">${escHtml(p.label || '🔗 PR')}</a>`;
     });
+    if (task.docs && task.docs.length) {
+      const icon = { gdoc:'📄', gsheet:'📊', gslides:'📊', figma:'🎨', confluence:'📝', jira:'🎫', notion:'📓', quip:'📓' };
+      task.docs.forEach(d => {
+        if (!d.url) return;
+        const ico = icon[d.type] || '📎';
+        meta += `<a class="pr-link" href="${escHtml(d.url)}" target="_blank" rel="noopener" title="${escHtml(d.title || d.url)}">${ico}</a>`;
+      });
+    }
     if (task.jiraKey && task.jiraKey.trim()) {
       const jiraBase = /^https?:\/\//i.test(window._jiraBaseUrl || '') ? window._jiraBaseUrl : '';
       if (jiraBase) {
@@ -1487,6 +1500,8 @@
     document.getElementById('taskStatus').value = task ? (task.status || 'todo') : 'todo';
     modalPrLinks = task ? [...(task.prLinks || [])] : [];
     renderModalPrLinks();
+    modalDocs = task ? [...(task.docs || [])] : [];
+    renderModalDocs();
     document.getElementById('taskSpecLink').value = task ? (task.specLink || '') : '';
     document.getElementById('taskBlockedOn').value = task ? (task.blockedOn || '') : '';
     updateSpecLinkBtn();
@@ -1695,6 +1710,7 @@
     const prLinks  = modalPrLinks.filter(p => p.url && p.url.trim())
                        .map(p => ({ url: p.url.trim(), label: p.label || prLabel(p.url.trim()) }));
     const prLink   = prLinks.length ? prLinks[0].url : ''; // kept for agent backward-compat
+    const docs     = modalDocs.filter(d => d.url);
     const specLink = document.getElementById('taskSpecLink').value.trim();
     const blockedOn = status === 'blocked' ? document.getElementById('taskBlockedOn').value.trim() : '';
     const jiraKey  = document.getElementById('taskJiraKey').value.trim().toUpperCase();
@@ -1734,7 +1750,7 @@
         const prev = tasks[idx];
         const patch = {
           title, day: dayStr, priority, notes, ongoing: isOngoing, subtasks,
-          status, done, prLink, prLinks, specLink, blockedOn, jiraKey, log: modalLog,
+          status, done, prLink, prLinks, docs, specLink, blockedOn, jiraKey, log: modalLog,
           claimedBy: status === 'done' ? '' : prev.claimedBy,
           lastUpdated: new Date().toISOString(),
         };
@@ -1756,7 +1772,7 @@
         id: `tmp-${Date.now()}`,   // optimistic id — replaced by server response
         title, day: dayStr, priority, notes,
         ongoing: isOngoing, subtasks,
-        status, done, prLink, prLinks, specLink, blockedOn, jiraKey, log: modalLog,
+        status, done, prLink, prLinks, docs, specLink, blockedOn, jiraKey, log: modalLog,
         createdAt: new Date().toISOString(),
         lastUpdated: new Date().toISOString(),
       };
@@ -1879,6 +1895,30 @@
   document.getElementById('taskStatus').addEventListener('change', updateBlockedOnVisibility);
 
   // PR link open button — show when there's a URL, update href as you type
+  const DOC_ICON = { gdoc:'📄', gsheet:'📊', gslides:'📊', figma:'🎨', confluence:'📝', jira:'🎫', notion:'📓', quip:'📓' };
+  let modalDocs = [];
+
+  function renderModalDocs() {
+    const row = document.getElementById('docsRow');
+    const list = document.getElementById('docLinkList');
+    if (!modalDocs.length) { row.style.display = 'none'; list.innerHTML = ''; return; }
+    row.style.display = '';
+    list.innerHTML = modalDocs.map((d, i) => `
+      <div class="pr-link-row" data-i="${i}">
+        <span style="font-size:15px;flex-shrink:0">${DOC_ICON[d.type] || '📎'}</span>
+        <a class="pr-link-label" href="${escHtml(d.url)}" target="_blank" rel="noopener"
+           style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--accent);font-size:13px"
+           title="${escHtml(d.url)}">${escHtml(d.title || d.url)}</a>
+        <button class="pr-link-remove" type="button" data-i="${i}" title="Remove">✕</button>
+      </div>`).join('');
+    list.querySelectorAll('.pr-link-remove').forEach(btn => {
+      btn.addEventListener('click', () => {
+        modalDocs.splice(parseInt(btn.dataset.i), 1);
+        renderModalDocs();
+      });
+    });
+  }
+
   let modalPrLinks = [];
 
   function renderModalPrLinks() {
