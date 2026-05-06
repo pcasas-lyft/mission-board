@@ -467,17 +467,47 @@
     }
     .btn-cancel:hover { background: var(--border); }
     .btn-save {
-      background: var(--accent); border: none; color: #fff;
+      background: var(--accent); border: none; color: #1e1e2e;
       border-radius: 8px; padding: 8px 18px; cursor: pointer;
-      font-size: 14px; font-weight: 600;
+      font-size: 14px; font-weight: 700;
     }
     .btn-save:hover { background: #6a9de8; }
     .btn-delete {
-      background: rgba(248,113,113,0.12); border: 1px solid rgba(248,113,113,0.25);
+      background: rgba(243,139,168,0.12); border: 1px solid rgba(243,139,168,0.25);
       color: var(--red); border-radius: 8px; padding: 8px 16px;
       cursor: pointer; font-size: 14px; margin-right: auto;
     }
-    .btn-delete:hover { background: rgba(248,113,113,0.22); }
+    .btn-delete:hover { background: rgba(243,139,168,0.22); }
+
+    /* ── Undo toast ── */
+    .undo-toast {
+      position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 10px; padding: 11px 16px;
+      display: flex; align-items: center; gap: 14px;
+      box-shadow: var(--shadow); z-index: 600;
+      font-size: 13px; color: var(--text); white-space: nowrap;
+      opacity: 0; pointer-events: none; transition: opacity 0.2s;
+    }
+    .undo-toast.visible { opacity: 1; pointer-events: auto; }
+    .undo-toast-msg { color: var(--text-muted); }
+    .undo-toast-msg strong { color: var(--text); }
+    .undo-action {
+      background: var(--accent); border: none; color: #1e1e2e;
+      border-radius: 6px; padding: 5px 12px; cursor: pointer;
+      font-size: 12px; font-weight: 700; transition: background 0.15s;
+    }
+    .undo-action:hover { background: #6a9de8; }
+
+    /* ── Parent task picker ── */
+    .parent-select {
+      width: 100%; background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 8px; color: var(--text); font-size: 14px;
+      padding: 9px 11px; outline: none; font-family: inherit;
+      transition: border-color 0.15s; cursor: pointer;
+    }
+    .parent-select:focus { border-color: var(--accent); }
+    .parent-select option { background: var(--surface2); }
 
     @media (max-width: 600px) { .board { grid-template-columns: repeat(2, 1fr) !important; } }
 
@@ -724,6 +754,13 @@
       </div>
     </div>
 
+    <div class="form-group" id="parentTaskRow">
+      <label>Move under parent task</label>
+      <select class="parent-select" id="parentTaskSelect">
+        <option value="">— Keep as standalone task —</option>
+      </select>
+    </div>
+
     <div class="form-group">
       <label>Subtasks</label>
       <div class="subtask-list" id="subtaskList"></div>
@@ -747,11 +784,17 @@
     </div>
 
     <div class="modal-actions">
-      <button class="btn-delete" id="deleteTaskBtn" style="display:none">Delete</button>
+      <button class="btn-delete" id="deleteTaskBtn" style="display:none">Delete Task</button>
       <button class="btn-cancel" id="closeModal">Cancel</button>
       <button class="btn-save" id="saveTask">Save Task</button>
     </div>
   </div>
+</div>
+
+<!-- Undo toast -->
+<div class="undo-toast" id="undoToast">
+  <span class="undo-toast-msg" id="undoToastMsg"></span>
+  <button class="undo-action" id="undoBtn">Undo</button>
 </div>
 
 <script>
@@ -1300,6 +1343,20 @@
     modalSubtasks = task && task.subtasks ? task.subtasks.map(s => ({ ...s })) : [];
     renderModalSubtasks();
 
+    // Parent task picker — list all other tasks (prefer ongoing at top)
+    const parentSelect = document.getElementById('parentTaskSelect');
+    parentSelect.innerHTML = '<option value="">— Keep as standalone task —</option>';
+    const parentRow = document.getElementById('parentTaskRow');
+    const candidates = tasks.filter(t => t.id !== (task && task.id));
+    candidates.sort((a, b) => (b.ongoing ? 1 : 0) - (a.ongoing ? 1 : 0));
+    candidates.forEach(t => {
+      const opt = document.createElement('option');
+      opt.value = t.id;
+      opt.textContent = (t.ongoing ? '🗓 ' : '') + t.title;
+      parentSelect.appendChild(opt);
+    });
+    parentRow.style.display = candidates.length ? '' : 'none';
+
     document.getElementById('modalOverlay').classList.add('open');
     setTimeout(() => document.getElementById('taskTitle').focus(), 50);
   }
@@ -1458,6 +1515,32 @@
     const blockedOn = status === 'blocked' ? document.getElementById('taskBlockedOn').value.trim() : '';
     const jiraKey  = document.getElementById('taskJiraKey').value.trim().toUpperCase();
     const done     = status === 'done';
+    const parentTaskId = document.getElementById('parentTaskSelect').value;
+
+    // ── Convert to subtask of another task ──────────────────
+    if (parentTaskId) {
+      const parentTask = tasks.find(t => t.id === parentTaskId);
+      if (parentTask) {
+        const newSub = {
+          id: 'st' + Date.now(),
+          text: title,
+          done,
+          ...(dayStr && dayStr !== 'unscheduled' ? { day: dayStr } : {}),
+        };
+        parentTask.subtasks = [...(parentTask.subtasks || []), newSub];
+        parentTask.lastUpdated = new Date().toISOString();
+        if (editingId) tasks = tasks.filter(t => t.id !== editingId);
+        fetch(`/tasks/${parentTaskId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ subtasks: parentTask.subtasks, lastUpdated: parentTask.lastUpdated }),
+        });
+        saveTasks();
+        closeModal();
+        renderBoard();
+        return;
+      }
+    }
 
     setSyncState('saving');
 
@@ -1517,14 +1600,44 @@
     renderBoard();
   }
 
+  let _undoState = null;
+  let _undoTimer = null;
+
   function deleteTask() {
     if (!editingId) return;
-    if (!confirm('Delete this task?')) return;
-    tasks = tasks.filter(t => t.id !== editingId);
+    const idx = tasks.findIndex(t => t.id === editingId);
+    if (idx === -1) return;
+    const deleted = tasks[idx];
+    _undoState = { task: deleted, index: idx };
+    tasks.splice(idx, 1);
     saveTasks();
     closeModal();
     renderBoard();
+    showUndoToast(`Deleted "<strong>${escHtml(deleted.title)}</strong>"`);
   }
+
+  function showUndoToast(msg) {
+    clearTimeout(_undoTimer);
+    const toast = document.getElementById('undoToast');
+    document.getElementById('undoToastMsg').innerHTML = msg;
+    toast.classList.add('visible');
+    _undoTimer = setTimeout(hideUndoToast, 6000);
+  }
+
+  function hideUndoToast() {
+    document.getElementById('undoToast').classList.remove('visible');
+    _undoState = null;
+  }
+
+  document.getElementById('undoBtn').addEventListener('click', () => {
+    if (!_undoState) return;
+    clearTimeout(_undoTimer);
+    tasks.splice(_undoState.index, 0, _undoState.task);
+    _undoState = null;
+    saveTasks();
+    renderBoard();
+    hideUndoToast();
+  });
 
   function dayIndexFromDateStr(dateStr) {
     const d = new Date(dateStr + 'T00:00:00');
