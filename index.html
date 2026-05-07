@@ -1381,12 +1381,13 @@
     dates.forEach((date) => {
       const dateStr = formatDate(date);
       const past = isPast(date) && !isToday(date);
-      const dayTasks = tasks.filter(t => !t.ongoing && t.day === dateStr)
+      // Project-child tasks (parentId set) always go in day columns even if ongoing flag is set
+      const dayTasks = tasks.filter(t => (!t.ongoing || t.parentId) && t.day === dateStr)
         .sort((a, b) => (a.done ? 1 : 0) - (b.done ? 1 : 0));
 
-      // Scheduled subtasks from ongoing tasks for this day
+      // Scheduled subtasks from ongoing tasks AND project-child tasks for this day
       const scheduledSubs = [];
-      tasks.filter(t => t.ongoing && t.subtasks && t.subtasks.length).forEach(parentTask => {
+      tasks.filter(t => t.subtasks && t.subtasks.length && (t.ongoing || t.parentId)).forEach(parentTask => {
         parentTask.subtasks.forEach(st => {
           if (st.day === dateStr) scheduledSubs.push({ subtask: st, parentTask });
         });
@@ -1421,19 +1422,32 @@
         body.innerHTML = '<div class="empty-col">No tasks</div>';
       } else {
         // Group active tasks by project for color-coded sections
-        const sections = new Map(); // projectId|'__none__' -> {project, color, items}
-        activeDayTasks.forEach(t => {
-          const key = t.parentId || '__none__';
-          if (!sections.has(key)) {
-            const project = t.parentId ? tasks.find(p => p.id === t.parentId) : null;
-            const color = t.parentId ? (projectColors.get(t.parentId) || '#cba6f7') : null;
-            sections.set(key, { project, color, items: [] });
+        // projectId | '__none__' -> {project, color, items[], subs[]}
+        const sections = new Map();
+        const ensureSection = (projectId) => {
+          if (!sections.has(projectId)) {
+            const project = projectId !== '__none__' ? tasks.find(p => p.id === projectId) : null;
+            const color = projectId !== '__none__' ? (projectColors.get(projectId) || '#cba6f7') : null;
+            sections.set(projectId, { project, color, items: [], subs: [] });
           }
-          sections.get(key).items.push(t);
+          return sections.get(projectId);
+        };
+
+        activeDayTasks.forEach(t => ensureSection(t.parentId || '__none__').items.push(t));
+
+        // Group subtask mini-cards into their grandparent project section
+        const orphanSubs = [];
+        activeSubs.forEach(({subtask, parentTask}) => {
+          const grandparentId = parentTask.parentId;
+          if (grandparentId) {
+            ensureSection(grandparentId).subs.push({subtask, parentTask});
+          } else {
+            orphanSubs.push({subtask, parentTask});
+          }
         });
 
-        sections.forEach(({ project, color, items }) => {
-          if (items.length === 0) return;
+        sections.forEach(({ project, color, items, subs }) => {
+          if (items.length === 0 && subs.length === 0) return;
           const section = document.createElement('div');
           section.className = 'project-section' + (project ? '' : ' project-section-none');
           if (project && color) {
@@ -1446,14 +1460,20 @@
             section.appendChild(hdr);
           }
           items.forEach(t => section.appendChild(makeTaskCard(t, color)));
+          subs.forEach(({subtask, parentTask}) => section.appendChild(makeSubtaskMiniCard(subtask, parentTask, color)));
           body.appendChild(section);
         });
 
-        activeSubs.forEach(({subtask, parentTask}) => body.appendChild(makeSubtaskMiniCard(subtask, parentTask)));
+        // Subtasks from tasks not under any project (no grandparent)
+        orphanSubs.forEach(({subtask, parentTask}) => body.appendChild(makeSubtaskMiniCard(subtask, parentTask)));
         if (doneCount > 0) {
           body.appendChild(makeDoneToggle(doneCount, container => {
             doneDayTasks.forEach(t => container.appendChild(makeTaskCard(t)));
-            doneSubs.forEach(({subtask, parentTask}) => container.appendChild(makeSubtaskMiniCard(subtask, parentTask)));
+            doneSubs.forEach(({subtask, parentTask}) => {
+              const grandparentId = parentTask.parentId;
+              const color = grandparentId ? (projectColors.get(grandparentId) || '#cba6f7') : null;
+              container.appendChild(makeSubtaskMiniCard(subtask, parentTask, color));
+            });
           }));
         }
       }
@@ -1465,8 +1485,8 @@
       board.appendChild(col);
     });
 
-    // Unscheduled column — all non-ongoing tasks without a day (including project children)
-    const unscheduled = tasks.filter(t => !t.ongoing && t.day === 'unscheduled')
+    // Unscheduled column — project-child tasks always here, non-ongoing tasks without a day
+    const unscheduled = tasks.filter(t => (!t.ongoing || t.parentId) && t.day === 'unscheduled')
       .sort((a, b) => (a.done ? 1 : 0) - (b.done ? 1 : 0));
     const pending = unscheduled.filter(t => !t.done).length;
 
@@ -1746,18 +1766,20 @@
     return card;
   }
 
-  function makeSubtaskMiniCard(subtask, parentTask) {
+  function makeSubtaskMiniCard(subtask, parentTask, projectColor) {
     const card = document.createElement('div');
     card.className = 'task-card' + (subtask.done ? ' done' : '');
     card.dataset.status = subtask.done ? 'done' : 'todo';
 
+    // Show parent task title; if it has a project, tint the badge with the project color
+    const badgeStyle = projectColor ? `style="color:${projectColor};border-color:${projectColor}"` : '';
     card.innerHTML = `
       <div class="task-top">
         <div class="task-checkbox">${CHECK_SVG}</div>
         <div class="task-title">${escHtml(subtask.text)}</div>
       </div>
       <div class="task-meta">
-        <span class="parent-badge">↳ ${escHtml(parentTask.title)}</span>
+        <span class="parent-badge" ${badgeStyle}>↳ ${escHtml(parentTask.title)}</span>
       </div>`;
 
     card.querySelector('.task-checkbox').addEventListener('click', e => {
@@ -2057,7 +2079,8 @@
     const subtasks = modalSubtasks.filter(s => s.text.trim()).map(s => ({ ...s, text: s.text.trim() }));
 
     // Auto-promote to Active Project when subtasks are added
-    if (subtasks.length > 0 && !isOngoing) {
+    // (only for top-level tasks — project-child tasks stay in their day column)
+    if (subtasks.length > 0 && !isOngoing && !selectedProjectId) {
       isOngoing = true;
       updateOngoingToggleUI();
     }
@@ -2125,7 +2148,8 @@
         parentTask.subtasks = [...(parentTask.subtasks || []), newSub];
         parentTask.lastUpdated = new Date().toISOString();
         // Auto-promote parent to Active Project when it gains its first subtask
-        if (!parentTask.ongoing) parentTask.ongoing = true;
+        // (only if it's a top-level task, not a project child)
+        if (!parentTask.ongoing && !parentTask.parentId) parentTask.ongoing = true;
         if (editingId) tasks = tasks.filter(t => t.id !== editingId);
         fetch(`/tasks/${parentTaskId}`, {
           method: 'PATCH',
