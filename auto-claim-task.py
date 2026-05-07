@@ -109,7 +109,7 @@ def main():
     try:
         write_session_tasks(branch, [task_id])
     except Exception:
-        pass  # non-fatal — notification will fall back to slug matching
+        pass
 
     print(json.dumps({
         'systemMessage': (

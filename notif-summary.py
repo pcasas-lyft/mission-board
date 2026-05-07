@@ -17,7 +17,7 @@ import json, os, sys
 
 # Add the tracker directory to the path so we can import lib.py
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from lib import find_task_by_slug, read_session_tasks
+from lib import read_session_tasks
 
 
 def trunc(s, n=36):
@@ -55,12 +55,6 @@ def main():
         claimed = [t for t in tasks if t.get('claimedBy') == branch]
         if claimed:
             session_tasks = claimed
-
-    # Strategy 3: slug match
-    if not session_tasks and branch and branch not in ('HEAD', 'main', 'master', ''):
-        t = find_task_by_slug(tasks, branch)
-        if t:
-            session_tasks = [t]
 
     if not session_tasks:
         return  # No reliable match — stay silent

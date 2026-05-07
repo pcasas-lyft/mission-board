@@ -35,7 +35,7 @@ def find_task_by_slug(tasks, branch):
         return None
 
     second_score = scored[1][0] if len(scored) > 1 else 0
-    if scored[0][0] - second_score < 2 and second_score > 0:
+    if scored[0][0] - second_score < 1 and second_score > 0:
         return None
 
     return scored[0][1]

@@ -40,7 +40,8 @@ chmod +x \
   "$INSTALL_DIR/on-stop.sh" \
   "$INSTALL_DIR/watch-status.sh" \
   "$INSTALL_DIR/setup.sh" \
-  "$INSTALL_DIR/update.sh" 2>/dev/null || true
+  "$INSTALL_DIR/update.sh" \
+  "$INSTALL_DIR/mcp_server.py" 2>/dev/null || true
 echo "✓ Scripts marked executable"
 
 # ── 2. Create tasks.json (first-time only) ───────────────────────────────────
@@ -70,8 +71,9 @@ sed -e "s|__DONELOG_PATH__|$DONELOG_PATH|g" \
     > "$HOME/.claude/skills/done/SKILL.md"
 echo "✓ Installed /done skill   → $HOME/.claude/skills/done/SKILL.md"
 
-# ── 5. Merge Claude Code hooks ───────────────────────────────────────────────
+# ── 5. Merge Claude Code hooks + MCP server ─────────────────────────────────
 "$PYTHON3" "$INSTALL_DIR/install-hooks.py" "$INSTALL_DIR" "$WORKSTATUS_PATH"
+echo "✓ MCP server registered → todo-tracker tools available in Claude Code"
 
 # ── 6. Create CLAUDE.md in parent directory ───────────────────────────────────
 if [ ! -f "$PARENT_DIR/CLAUDE.md" ]; then

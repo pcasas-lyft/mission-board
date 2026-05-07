@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Merges todo-tracker hooks into ~/.claude/settings.json.
+Merges todo-tracker hooks and MCP server config into ~/.claude/settings.json.
 Called by setup.sh — not meant to be run directly.
 
 Usage: python3 install-hooks.py <install_dir> <workstatus_path>
@@ -14,25 +14,11 @@ def main():
 
     install_dir     = sys.argv[1].rstrip('/')
     workstatus_path = sys.argv[2]
-    base_url        = 'http://localhost:3456'
-
-    # The SessionStart systemMessage (inner JSON must escape its quotes)
-    session_msg = (
-        'TASK TRACKER: Before starting work, check '
-        + workstatus_path
-        + ' to find your task. '
-        + 'PATCH it to in-progress via ' + base_url + '/tasks/<id>. '
-        + 'If no matching task exists, create one first with '
-        + 'POST ' + base_url + '/tasks/new '
-        + u'— body: {\\"title\\": \\"...\\", \\"status\\": \\"in-progress\\"}. '
-        + 'As you make progress, append log entries via PATCH ' + base_url + '/tasks/<id>/log '
-        + u'— body: {\\"text\\": \\"what you built or decided\\"}. '
-        + 'Always update task status when done.'
-    )
 
     new_hooks = {
         "SessionStart": [{"matcher": "", "hooks": [{"type": "command",
-            "command": "echo '{\"systemMessage\": \"" + session_msg + "\"}'"
+            "command": f"python3 {install_dir}/session-start.py",
+            "statusMessage": "Loading work status...",
         }]}],
         "WorktreeRemove": [{"matcher": "", "hooks": [{"type": "command",
             "command": f"python3 {install_dir}/auto-unclaim-task.py",
@@ -66,11 +52,19 @@ def main():
     existing.update(new_hooks)
     settings["hooks"] = existing
 
+    # Register MCP server — idempotent (overwrites our own entry only)
+    mcp_servers = settings.get("mcpServers", {})
+    mcp_servers["todo-tracker"] = {
+        "command": "python3",
+        "args": [f"{install_dir}/mcp_server.py"],
+    }
+    settings["mcpServers"] = mcp_servers
+
     with open(settings_path, "w") as f:
         json.dump(settings, f, indent=2)
         f.write("\n")
 
-    print(f"✓ Updated {settings_path}")
+    print(f"✓ Updated {settings_path} (hooks + MCP server)")
 
 if __name__ == "__main__":
     main()

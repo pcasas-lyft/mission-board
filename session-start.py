@@ -99,18 +99,21 @@ def main():
 
     parts.append(
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        "TASK TRACKER  http://localhost:3456\n"
-        "  PATCH /tasks/<id>          — update status, notes, claimedBy\n"
-        "  PATCH /tasks/<id>/log      — append a progress log entry\n"
-        "  POST  /tasks/new           — create a task if none exists\n"
-        "  DELETE /tasks/<id>         — remove a task\n\n"
-        "When finishing work, PATCH with:\n"
-        '  {"status":"in-review","notes":"Done: ...\\nNext: ...",\n'
-        '   "prLinks":[{"url":"https://github.com/…","label":"repo #N"}],\n'
-        '   "claimedBy":"","lastUpdated":"<ISO timestamp>"}\n\n'
+        "TASK TRACKER — use the todo-tracker MCP tools (preferred over curl):\n"
+        "  list_tasks          — see all tasks (filter by status)\n"
+        "  search_tasks        — find a task by keyword\n"
+        "  get_task            — full detail for one task\n"
+        "  create_task         — add a task if none exists\n"
+        "  update_task         — change status, notes, prLinks, claimedBy\n\n"
+        "When the user mentions work by name, call search_tasks FIRST before\n"
+        "searching the codebase — the tracker has PR links, notes, and context.\n\n"
+        "When finishing work, update_task with:\n"
+        '  status="in-review", notes="Done: ...\\nNext: ...",\n'
+        '  prLinks=[{"url":"https://github.com/…","label":"repo #N"}],\n'
+        '  claimedBy=""\n\n'
         "Multi-task sessions: if you pivot to new work mid-session, check\n"
-        "GET /tasks for a match and ask the user before linking it:\n"
-        '  python3 /Users/pcasas/src/todo-tracker/add-session-task.py <id>'
+        "list_tasks for a match and ask the user before linking it:\n"
+        f"  python3 {INSTALL_DIR}/add-session-task.py <id>"
     )
 
     print(json.dumps({"systemMessage": '\n\n'.join(parts)}))
