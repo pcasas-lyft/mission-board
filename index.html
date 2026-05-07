@@ -636,6 +636,104 @@
     }
     .jira-config-btn .jira-dot.on { background: var(--green); }
 
+    /* ── Project Detail Panel ── */
+    .proj-panel-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.55); z-index: 150;
+    }
+    .proj-panel-overlay.open { display: block; }
+    .proj-panel {
+      position: fixed; top: 0; right: 0; bottom: 0;
+      width: 520px; max-width: 98vw;
+      background: var(--surface); border-left: 1px solid var(--border);
+      box-shadow: -8px 0 40px rgba(0,0,0,0.4);
+      display: flex; flex-direction: column;
+      transform: translateX(100%);
+      transition: transform 0.22s cubic-bezier(0.4,0,0.2,1);
+    }
+    .proj-panel-overlay.open .proj-panel { transform: translateX(0); }
+    .proj-panel-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 20px 20px 14px; border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .proj-panel-title-wrap { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
+    .proj-panel-dot {
+      width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0;
+    }
+    .proj-panel-title { font-size: 18px; font-weight: 700; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .proj-panel-actions { display: flex; gap: 6px; align-items: center; flex-shrink: 0; }
+    .proj-panel-edit-btn, .proj-panel-close {
+      background: none; border: 1px solid var(--border); color: var(--text-muted);
+      border-radius: 7px; cursor: pointer; font-size: 15px; padding: 4px 9px;
+      transition: background 0.15s, color 0.15s;
+    }
+    .proj-panel-edit-btn:hover, .proj-panel-close:hover { background: var(--surface2); color: var(--text); }
+    .proj-panel-meta {
+      padding: 10px 20px 0; font-size: 12px; color: var(--text-muted);
+      display: flex; gap: 12px; flex-wrap: wrap; flex-shrink: 0;
+    }
+    .proj-panel-meta-item { display: flex; align-items: center; gap: 4px; }
+    .proj-panel-progress {
+      padding: 12px 20px; flex-shrink: 0;
+    }
+    .proj-panel-prog-bar { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+    .proj-panel-prog-fill { height: 100%; border-radius: 3px; transition: width 0.3s; }
+    .proj-panel-prog-label { font-size: 11px; color: var(--text-muted); margin-top: 5px; }
+    .proj-panel-body {
+      flex: 1; overflow-y: auto; padding: 6px 20px 12px;
+    }
+    .proj-panel-group { margin-bottom: 18px; }
+    .proj-panel-group-hdr {
+      font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;
+      color: var(--text-muted); padding: 8px 0 6px;
+      display: flex; align-items: center; gap: 6px;
+      border-bottom: 1px solid var(--border); margin-bottom: 6px;
+    }
+    .proj-panel-group-count {
+      background: var(--surface2); border-radius: 10px;
+      padding: 1px 7px; font-size: 10px; color: var(--text-muted);
+    }
+    .proj-panel-task-row {
+      display: flex; align-items: flex-start; gap: 10px;
+      padding: 9px 10px; border-radius: 8px; cursor: pointer;
+      transition: background 0.12s; border: 1px solid transparent;
+    }
+    .proj-panel-task-row:hover { background: var(--surface2); border-color: var(--border); }
+    .proj-panel-task-check {
+      width: 16px; height: 16px; border-radius: 4px; border: 1.5px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; margin-top: 1px; transition: background 0.15s, border-color 0.15s;
+      cursor: pointer;
+    }
+    .proj-panel-task-check svg { display: none; width: 10px; height: 8px; stroke: #fff; stroke-width: 2; fill: none; }
+    .proj-panel-task-check.checked { background: var(--green); border-color: var(--green); }
+    .proj-panel-task-check.checked svg { display: block; }
+    .proj-panel-task-row.done-row .proj-panel-task-title { text-decoration: line-through; color: var(--done-text); }
+    .proj-panel-task-main { flex: 1; min-width: 0; }
+    .proj-panel-task-title { font-size: 13px; font-weight: 500; line-height: 1.4; word-break: break-word; }
+    .proj-panel-task-badges { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+    .proj-panel-badge {
+      font-size: 10px; padding: 2px 7px; border-radius: 10px;
+      border: 1px solid var(--border); color: var(--text-muted);
+      background: var(--surface2);
+    }
+    .proj-panel-badge.day { color: var(--blue); border-color: var(--blue); }
+    .proj-panel-badge.status-in-progress { color: var(--yellow); border-color: var(--yellow); }
+    .proj-panel-badge.status-in-review   { color: var(--mauve); border-color: var(--mauve); }
+    .proj-panel-badge.status-blocked     { color: var(--red);   border-color: var(--red); }
+    .proj-panel-badge.jira               { color: var(--blue); border-color: var(--blue); }
+    .proj-panel-task-notes { font-size: 11px; color: var(--text-muted); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .proj-panel-footer {
+      padding: 14px 20px; border-top: 1px solid var(--border); flex-shrink: 0;
+    }
+    .proj-panel-add-btn {
+      width: 100%; background: var(--surface2); border: 1px dashed var(--border);
+      color: var(--text-muted); border-radius: 9px; padding: 10px;
+      cursor: pointer; font-size: 13px; transition: background 0.15s, color 0.15s, border-color 0.15s;
+    }
+    .proj-panel-add-btn:hover { background: var(--surface); color: var(--text); border-color: var(--accent); }
+
     /* ── Jira settings modal ── */
     .jira-modal-overlay {
       display: none; position: fixed; inset: 0;
@@ -895,6 +993,28 @@
       <button class="spec-panel-close" id="archiveClose">✕</button>
     </div>
     <div class="list-modal-body" id="archiveList"></div>
+  </div>
+</div>
+
+<!-- Project Detail Panel -->
+<div class="proj-panel-overlay" id="projPanelOverlay">
+  <div class="proj-panel" id="projPanel">
+    <div class="proj-panel-header">
+      <div class="proj-panel-title-wrap">
+        <span class="proj-panel-dot" id="projPanelDot"></span>
+        <h2 class="proj-panel-title" id="projPanelTitle"></h2>
+      </div>
+      <div class="proj-panel-actions">
+        <button class="proj-panel-edit-btn" id="projPanelEditBtn" title="Edit project">✎</button>
+        <button class="proj-panel-close" id="projPanelClose">✕</button>
+      </div>
+    </div>
+    <div class="proj-panel-meta" id="projPanelMeta"></div>
+    <div class="proj-panel-progress" id="projPanelProgress"></div>
+    <div class="proj-panel-body" id="projPanelBody"></div>
+    <div class="proj-panel-footer">
+      <button class="proj-panel-add-btn" id="projPanelAddBtn">+ Add task to project</button>
+    </div>
   </div>
 </div>
 
@@ -1371,9 +1491,19 @@
     return map;
   }
 
+  let _projPanelId = null;  // ID of project currently shown in the side panel
+
   function renderBoard() {
     const projectColors = buildProjectColorMap();
     renderOngoingBand(projectColors);
+    // Keep project panel in sync if open
+    if (_projPanelId) {
+      const proj = tasks.find(t => t.id === _projPanelId);
+      if (proj) {
+        const color = projectColors.get(_projPanelId) || '#cba6f7';
+        renderProjectPanelTasks(tasks.filter(t => t.parentId === _projPanelId), color);
+      }
+    }
     const board = document.getElementById('board');
     board.innerHTML = '';
     const dates = getDisplayDays(weekOffset);
@@ -1762,7 +1892,16 @@
     }
 
     addDragHandlers(card, task);
-    card.addEventListener('click', () => openModal(task));
+    // Click project card → project detail panel; drag is handled separately
+    card.addEventListener('click', (e) => {
+      if (e.target.closest('.task-checkbox') || e.target.closest('.ptask-check')) return;
+      const isProject = task.ongoing && !task.parentId;
+      if (isProject) {
+        openProjectPanel(task);
+      } else {
+        openModal(task);
+      }
+    });
     return card;
   }
 
@@ -1874,7 +2013,7 @@
 
   let isOngoing = false;
 
-  function openModal(task, defaultDay = null) {
+  function openModal(task, defaultDay = null, presetProjectId = null) {
     editingId = task ? task.id : null;
     isOngoing = task ? !!task.ongoing : false;
 
@@ -1935,7 +2074,8 @@
       const opt = document.createElement('option');
       opt.value = p.id;
       opt.textContent = p.title;
-      if (task && task.parentId === p.id) opt.selected = true;
+      // Pre-select if editing a task with parentId, or if a presetProjectId was passed
+      if ((task && task.parentId === p.id) || (!task && presetProjectId === p.id)) opt.selected = true;
       projectSelect.appendChild(opt);
     });
 
@@ -2469,8 +2609,158 @@
   });
 
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') closeModal();
+    if (e.key === 'Escape') { closeProjectPanel(); closeModal(); }
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') saveTask();
+  });
+
+  // ── Project Detail Panel ─────────────────────────────────────────────────
+
+  function openProjectPanel(project) {
+    _projPanelId = project.id;
+    const color = buildProjectColorMap().get(project.id) || '#cba6f7';
+    const children = tasks.filter(t => t.parentId === project.id);
+
+    // Header
+    document.getElementById('projPanelDot').style.background = color;
+    document.getElementById('projPanelTitle').textContent = project.title;
+    document.getElementById('projPanelTitle').style.color = color;
+
+    // Meta
+    const meta = document.getElementById('projPanelMeta');
+    const total = children.length;
+    const done  = children.filter(c => c.done || c.status === 'done').length;
+    const inProg = children.filter(c => c.status === 'in-progress').length;
+    const blocked = children.filter(c => c.status === 'blocked').length;
+    meta.innerHTML = [
+      `<span class="proj-panel-meta-item">📋 ${total} task${total !== 1 ? 's' : ''}</span>`,
+      inProg  ? `<span class="proj-panel-meta-item" style="color:var(--yellow)">🟡 ${inProg} in progress</span>` : '',
+      blocked ? `<span class="proj-panel-meta-item" style="color:var(--red)">⛔ ${blocked} blocked</span>` : '',
+      done    ? `<span class="proj-panel-meta-item" style="color:var(--green)">✅ ${done} done</span>` : '',
+    ].join('');
+
+    // Progress bar
+    const prog = document.getElementById('projPanelProgress');
+    if (total > 0) {
+      const pct = Math.round(done / total * 100);
+      prog.innerHTML = `
+        <div class="proj-panel-prog-bar">
+          <div class="proj-panel-prog-fill" style="width:${pct}%;background:${color}"></div>
+        </div>
+        <div class="proj-panel-prog-label">${pct}% complete · ${done}/${total} tasks done</div>`;
+    } else {
+      prog.innerHTML = '<div class="proj-panel-prog-label" style="color:var(--text-muted)">No tasks yet</div>';
+    }
+
+    // Task groups
+    renderProjectPanelTasks(children, color);
+
+    // Add task button
+    document.getElementById('projPanelAddBtn').onclick = () => {
+      closeProjectPanel();
+      openModal(null, 'unscheduled', project.id);
+    };
+
+    // Edit project button
+    document.getElementById('projPanelEditBtn').onclick = () => {
+      closeProjectPanel();
+      openModal(project);
+    };
+
+    document.getElementById('projPanelOverlay').classList.add('open');
+  }
+
+  function renderProjectPanelTasks(children, color) {
+    const body = document.getElementById('projPanelBody');
+    body.innerHTML = '';
+
+    const CHECK_MINI = `<svg viewBox="0 0 10 8"><polyline points="1,4 4,7 9,1"/></svg>`;
+    const STATUS_LABEL = { 'in-progress': 'In Progress', 'in-review': 'In Review', 'blocked': 'Blocked', 'todo': 'Todo', 'done': 'Done' };
+
+    const GROUPS = [
+      { key: 'blocked',     label: '⛔ Blocked',     filter: t => t.status === 'blocked' },
+      { key: 'in-progress', label: '🟡 In Progress',  filter: t => t.status === 'in-progress' },
+      { key: 'in-review',   label: '🔄 In Review',    filter: t => t.status === 'in-review' },
+      { key: 'todo',        label: '○ Todo',          filter: t => !t.done && t.status !== 'blocked' && t.status !== 'in-progress' && t.status !== 'in-review' },
+      { key: 'done',        label: '✅ Done',          filter: t => t.done || t.status === 'done' },
+    ];
+
+    GROUPS.forEach(({ key, label, filter }) => {
+      const items = children.filter(filter);
+      if (items.length === 0) return;
+
+      const group = document.createElement('div');
+      group.className = 'proj-panel-group';
+
+      const hdr = document.createElement('div');
+      hdr.className = 'proj-panel-group-hdr';
+      hdr.innerHTML = `${label} <span class="proj-panel-group-count">${items.length}</span>`;
+      group.appendChild(hdr);
+
+      items.forEach(child => {
+        const isDone = child.done || child.status === 'done';
+        const row = document.createElement('div');
+        row.className = 'proj-panel-task-row' + (isDone ? ' done-row' : '');
+
+        const dayLabel = child.day && child.day !== 'unscheduled'
+          ? new Date(child.day + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+          : '';
+
+        const notesSnippet = child.notes ? child.notes.split('\n')[0].slice(0, 80) : '';
+
+        row.innerHTML = `
+          <div class="proj-panel-task-check ${isDone ? 'checked' : ''}">${CHECK_MINI}</div>
+          <div class="proj-panel-task-main">
+            <div class="proj-panel-task-title">${escHtml(child.title)}</div>
+            <div class="proj-panel-task-badges">
+              ${dayLabel ? `<span class="proj-panel-badge day">📅 ${dayLabel}</span>` : ''}
+              ${child.jiraKey ? `<span class="proj-panel-badge jira">${escHtml(child.jiraKey)}</span>` : ''}
+              ${child.prLinks && child.prLinks.length ? child.prLinks.map(p => `<span class="proj-panel-badge">🔗 ${escHtml(p.label || 'PR')}</span>`).join('') : ''}
+            </div>
+            ${notesSnippet ? `<div class="proj-panel-task-notes">${escHtml(notesSnippet)}</div>` : ''}
+          </div>`;
+
+        row.querySelector('.proj-panel-task-check').addEventListener('click', e => {
+          e.stopPropagation();
+          child.done = !isDone;
+          child.status = child.done ? 'done' : (child.status === 'done' ? 'todo' : child.status);
+          child.lastUpdated = new Date().toISOString();
+          fetch(`/tasks/${child.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ done: child.done, status: child.status, lastUpdated: child.lastUpdated }),
+          }).catch(() => {});
+          saveTasks(child.id);
+          // Re-render both the panel and board
+          const proj = tasks.find(t => t.id === _projPanelId);
+          if (proj) renderProjectPanelTasks(tasks.filter(t => t.parentId === _projPanelId), color);
+          renderBoard();
+        });
+
+        row.addEventListener('click', e => {
+          if (e.target.closest('.proj-panel-task-check')) return;
+          closeProjectPanel();
+          openModal(child);
+        });
+
+        group.appendChild(row);
+      });
+
+      body.appendChild(group);
+    });
+
+    if (children.length === 0) {
+      body.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:20px 0;text-align:center">No tasks yet — add one below</div>';
+    }
+  }
+
+  function closeProjectPanel() {
+    document.getElementById('projPanelOverlay').classList.remove('open');
+    _projPanelId = null;
+  }
+
+  document.getElementById('projPanelClose').addEventListener('click', closeProjectPanel);
+  document.getElementById('projPanelOverlay').addEventListener('click', e => {
+    if (e.target === e.currentTarget) closeProjectPanel();
   });
 
   // ── Global drag cleanup — removes stuck highlight classes ───
