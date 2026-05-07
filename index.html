@@ -137,15 +137,25 @@
     .ptask-status { font-size: 10px; flex-shrink: 0; }
     .ptask-day { font-size: 10px; color: var(--text-muted); flex-shrink: 0; }
 
-    /* ── Project section headers in day columns ── */
-    .project-section { margin-bottom: 4px; }
-    .project-section-hdr {
-      font-size: 10px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase;
-      padding: 3px 8px; margin-bottom: 4px; border-radius: 3px;
-      border-left: 3px solid currentColor;
-      background: color-mix(in srgb, currentColor 8%, transparent);
+    /* ── Project section boxes in day columns ── */
+    .project-section {
+      margin-bottom: 8px;
+      border-radius: 7px;
+      border: 1.5px solid var(--border); /* overridden inline for project sections */
+      padding: 0 5px 5px;
+      background: rgba(0,0,0,0.12);
     }
-    .project-section-none .project-section-hdr { color: var(--text-muted); }
+    .project-section-none {
+      border-color: var(--border);
+      background: transparent;
+      padding: 0;
+    }
+    .project-section-hdr {
+      font-size: 10px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase;
+      padding: 5px 4px 4px;
+      margin-bottom: 2px;
+    }
+    .project-section-none .project-section-hdr { display: none; }
 
     /* Parent badge on task cards in day columns */
     .parent-project-badge {
@@ -270,9 +280,6 @@
     .project-progress.all-done .progress-label { color: var(--green); }
 
     /* ── Status left-border on cards ── */
-    .task-card[data-status="in-progress"]    { border-left: 3px solid var(--accent); }
-    .task-card[data-status="in-review"]      { border-left: 3px solid var(--yellow); }
-    .task-card[data-status="blocked"]        { border-left: 3px solid var(--red); }
     .ongoing-card[data-status="in-progress"] { border-left: 3px solid var(--accent); }
     .ongoing-card[data-status="in-review"]   { border-left: 3px solid var(--yellow); }
     .ongoing-card[data-status="blocked"]     { border-left: 3px solid var(--red); }
@@ -1406,6 +1413,8 @@
           const section = document.createElement('div');
           section.className = 'project-section' + (project ? '' : ' project-section-none');
           if (project && color) {
+            section.style.borderColor = color;
+            section.style.background = `color-mix(in srgb, ${color} 6%, transparent)`;
             const hdr = document.createElement('div');
             hdr.className = 'project-section-hdr';
             hdr.style.color = color;
