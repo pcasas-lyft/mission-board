@@ -440,6 +440,16 @@
       vertical-align: middle; margin-left: 4px;
     }
 
+    /* ── Project modal — hide task-only fields ── */
+    #taskModal[data-mode="project"] #projectRow,
+    #taskModal[data-mode="project"] #ongoingToggle,
+    #taskModal[data-mode="project"] #dayPriorityRow,
+    #taskModal[data-mode="project"] #parentTaskRow,
+    #taskModal[data-mode="project"] .subtask-list,
+    #taskModal[data-mode="project"] #addSubtaskBtn,
+    #taskModal[data-mode="project"] #detailsToggle { display: none !important; }
+    #taskModal[data-mode="project"] #detailsSection { display: block !important; }
+
     /* ── Modal ── */
     .modal-overlay {
       display: none; position: fixed; inset: 0;
@@ -890,7 +900,7 @@
 
 <!-- Task Modal -->
 <div class="modal-overlay" id="modalOverlay">
-  <div class="modal">
+  <div class="modal" id="taskModal">
     <h2 id="modalTitle">New Task</h2>
 
     <div class="form-group">
@@ -1826,7 +1836,9 @@
     editingId = task ? task.id : null;
     isOngoing = task ? !!task.ongoing : false;
 
-    document.getElementById('modalTitle').textContent = task ? 'Edit Task' : 'New Task';
+    const isProject = task && task.ongoing && !task.parentId;
+    document.getElementById('taskModal').dataset.mode = isProject ? 'project' : 'task';
+    document.getElementById('modalTitle').textContent = isProject ? 'Edit Project' : (task ? 'Edit Task' : 'New Task');
     document.getElementById('taskTitle').value = task ? task.title : '';
     document.getElementById('taskNotes').value = task ? (task.notes || '') : '';
     document.getElementById('taskPriority').value = task ? (task.priority || 'none') : 'none';
