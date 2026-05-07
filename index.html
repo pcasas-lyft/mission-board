@@ -899,7 +899,7 @@
       <div class="toggle-knob"></div>
       <div>
         <div class="toggle-label">Active Project</div>
-        <div class="toggle-sublabel">Lives in the Active Projects band — schedule work via subtasks</div>
+        <div class="toggle-sublabel">Lives in the Active Projects band — tasks go in the daily grid or Backlog</div>
       </div>
     </div>
 
@@ -907,7 +907,7 @@
       <div class="form-group">
         <label>Day</label>
         <select id="taskDay">
-          <option value="unscheduled">Unscheduled</option>
+          <option value="unscheduled">Backlog</option>
           <option value="0">Monday</option>
           <option value="1">Tuesday</option>
           <option value="2">Wednesday</option>
@@ -1397,7 +1397,7 @@
     const hdr = document.createElement('div');
     hdr.className = 'column-header';
     hdr.innerHTML = `
-      <div class="day-name">Unscheduled</div>
+      <div class="day-name">Backlog</div>
       <div class="day-date">—</div>
       <div class="task-count">${pending} task${pending !== 1 ? 's' : ''}</div>`;
 
@@ -1569,7 +1569,7 @@
 
   function makeOngoingCard(task) {
     const card = document.createElement('div');
-    card.className = 'ongoing-card' + (task.done ? ' done' : '') + (task.activeNow ? ' active-now' : '');
+    card.className = 'ongoing-card' + (task.done ? ' done' : '');
     card.dataset.status = task.status || 'todo';
 
     const { meta, extra } = buildMetaParts(task, true);
@@ -1595,24 +1595,13 @@
       </div>
       ${meta ? `<div class="task-meta">${meta}</div>` : ''}
       ${progressHtml}
-      ${extra || ''}
-      <button class="active-dot-btn" title="Toggle working on this now">
-        <div class="active-dot${task.activeNow ? ' on' : ''}"></div>
-        <span class="active-dot-label">${task.activeNow ? 'Active now' : 'Set active'}</span>
-      </button>`;
+      ${extra || ''}`;
 
     card.querySelector('.task-checkbox').addEventListener('click', e => {
       e.stopPropagation();
       task.done = !task.done;
       task.status = task.done ? 'done' : (task.status === 'done' ? 'todo' : task.status);
       task.lastUpdated = new Date().toISOString();
-      saveTasks();
-      renderBoard();
-    });
-
-    card.querySelector('.active-dot-btn').addEventListener('click', e => {
-      e.stopPropagation();
-      task.activeNow = !task.activeNow;
       saveTasks();
       renderBoard();
     });
