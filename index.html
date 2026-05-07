@@ -113,36 +113,45 @@
     .ongoing-card .task-top { display: flex; align-items: flex-start; gap: 8px; }
     .ongoing-card .task-title { font-size: 13px; font-weight: 500; line-height: 1.4; flex: 1; word-break: break-word; }
 
-    /* ── Child tasks inside a project card ── */
-    .project-children {
-      margin: 6px 0 4px;
-      display: flex; flex-direction: column; gap: 3px;
-    }
-    .project-child {
+    /* ── Project task list inside project cards ── */
+    .project-task-list { display: flex; flex-direction: column; gap: 2px; margin: 6px 0 2px; }
+    .project-task-row {
       display: flex; align-items: center; gap: 6px;
-      padding: 3px 6px; border-radius: 4px;
-      background: rgba(0,0,0,0.15); cursor: pointer;
+      padding: 4px 6px; border-radius: 4px;
+      background: rgba(0,0,0,0.18); cursor: pointer;
       transition: background 0.12s;
     }
-    .project-child:hover { background: rgba(255,255,255,0.06); }
-    .project-child.child-done .child-title { text-decoration: line-through; color: var(--done-text); }
-    .child-status-icon { font-size: 11px; flex-shrink: 0; }
-    .child-title { font-size: 11px; color: var(--text2); flex: 1; line-height: 1.3; }
-    .child-pr {
-      font-size: 10px; color: var(--accent); text-decoration: none;
-      border: 1px solid var(--accent-dim); border-radius: 3px; padding: 0 4px;
-      white-space: nowrap; flex-shrink: 0;
+    .project-task-row:hover { background: rgba(255,255,255,0.07); }
+    .project-task-row.ptask-done .ptask-title {
+      text-decoration: line-through; color: var(--done-text);
     }
-    .child-pr:hover { background: rgba(139,92,246,0.15); }
-    .child-jira {
-      font-size: 10px; color: var(--blue); text-decoration: none;
-      white-space: nowrap; flex-shrink: 0; opacity: 0.7;
+    .ptask-check {
+      width: 13px; height: 13px; border-radius: 3px; flex-shrink: 0;
+      border: 1.5px solid var(--border); background: transparent; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; transition: all 0.15s;
     }
+    .ptask-check.checked { background: var(--green); border-color: var(--green); }
+    .ptask-check.checked svg { display: block; }
+    .ptask-check svg { display: none; width: 9px; height: 9px; fill: none; stroke: var(--base); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+    .ptask-title { font-size: 11px; color: var(--text2); flex: 1; line-height: 1.3; }
+    .ptask-status { font-size: 10px; flex-shrink: 0; }
+    .ptask-day { font-size: 10px; color: var(--text-muted); flex-shrink: 0; }
+
+    /* ── Project section headers in day columns ── */
+    .project-section { margin-bottom: 4px; }
+    .project-section-hdr {
+      font-size: 10px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase;
+      padding: 3px 8px; margin-bottom: 4px; border-radius: 3px;
+      border-left: 3px solid currentColor;
+      background: color-mix(in srgb, currentColor 8%, transparent);
+    }
+    .project-section-none .project-section-hdr { color: var(--text-muted); }
+
     /* Parent badge on task cards in day columns */
     .parent-project-badge {
-      font-size: 10px; color: var(--purple); background: rgba(192,132,252,0.12);
-      border: 1px solid rgba(192,132,252,0.3); border-radius: 3px;
-      padding: 0 5px; white-space: nowrap;
+      font-size: 10px; font-weight: 600;
+      border-radius: 3px; padding: 0 5px; white-space: nowrap;
+      border: 1px solid currentColor; opacity: 0.85;
     }
 
     /* Active now indicator */
@@ -1320,9 +1329,20 @@
     return wrapper;
   }
 
+  // Deterministic color per project, stable across renders
+  const PROJECT_PALETTE = ['#cba6f7','#89b4fa','#a6e3a1','#fab387','#f9e2af','#94e2d5','#89dceb','#f38ba8'];
+  function buildProjectColorMap() {
+    const map = new Map();
+    tasks.filter(t => t.ongoing && !t.parentId).forEach((p, i) => {
+      map.set(p.id, PROJECT_PALETTE[i % PROJECT_PALETTE.length]);
+    });
+    return map;
+  }
+
   function renderBoard() {
     renderOngoingBand();
 
+    const projectColors = buildProjectColorMap();
     const board = document.getElementById('board');
     board.innerHTML = '';
     const dates = getDisplayDays(weekOffset);
@@ -1369,7 +1389,33 @@
       if (activeDayTasks.length === 0 && activeSubs.length === 0 && doneCount === 0) {
         body.innerHTML = '<div class="empty-col">No tasks</div>';
       } else {
-        activeDayTasks.forEach(t => body.appendChild(makeTaskCard(t)));
+        // Group active tasks by project for color-coded sections
+        const sections = new Map(); // projectId|'__none__' -> {project, color, items}
+        activeDayTasks.forEach(t => {
+          const key = t.parentId || '__none__';
+          if (!sections.has(key)) {
+            const project = t.parentId ? tasks.find(p => p.id === t.parentId) : null;
+            const color = t.parentId ? (projectColors.get(t.parentId) || '#cba6f7') : null;
+            sections.set(key, { project, color, items: [] });
+          }
+          sections.get(key).items.push(t);
+        });
+
+        sections.forEach(({ project, color, items }) => {
+          if (items.length === 0) return;
+          const section = document.createElement('div');
+          section.className = 'project-section' + (project ? '' : ' project-section-none');
+          if (project && color) {
+            const hdr = document.createElement('div');
+            hdr.className = 'project-section-hdr';
+            hdr.style.color = color;
+            hdr.textContent = project.title;
+            section.appendChild(hdr);
+          }
+          items.forEach(t => section.appendChild(makeTaskCard(t, color)));
+          body.appendChild(section);
+        });
+
         activeSubs.forEach(({subtask, parentTask}) => body.appendChild(makeSubtaskMiniCard(subtask, parentTask)));
         if (doneCount > 0) {
           body.appendChild(makeDoneToggle(doneCount, container => {
@@ -1511,7 +1557,7 @@
     });
   }
 
-  function makeTaskCard(task) {
+  function makeTaskCard(task, projectColor) {
     const card = document.createElement('div');
     card.className = 'task-card' + (task.done ? ' done' : '');
     card.dataset.status = task.status || 'todo';
@@ -1520,8 +1566,9 @@
 
     // Parent project badge — shown when this task belongs to a project
     const parentProject = task.parentId ? tasks.find(t => t.id === task.parentId) : null;
+    const badgeColor = projectColor || (task.parentId ? (buildProjectColorMap().get(task.parentId) || '#cba6f7') : null);
     const parentBadgeHtml = parentProject
-      ? `<span class="parent-project-badge">↳ ${escHtml(parentProject.title)}</span>`
+      ? `<span class="parent-project-badge" style="color:${badgeColor};border-color:${badgeColor}">↳ ${escHtml(parentProject.title)}</span>`
       : '';
 
     const lastLog = task.log && task.log.length ? task.log[task.log.length - 1] : null;
@@ -1574,19 +1621,23 @@
 
     const { meta, extra } = buildMetaParts(task, true);
 
-    // Progress bar — based on child tasks (full tasks with parentId) or lightweight subtasks
+    // Child tasks + lightweight subtasks
     const children = tasks.filter(t => t.parentId === task.id);
     const subs = (task.subtasks || []).filter(s => s.text && s.text.trim());
     const progressItems = children.length ? children : subs;
     const doneItems = children.length
       ? children.filter(c => c.done || c.status === 'done').length
       : subs.filter(s => s.done).length;
+
     const progressHtml = progressItems.length
       ? `<div class="project-progress${doneItems === progressItems.length ? ' all-done' : ''}">
            <span class="progress-bar-wrap"><span class="progress-bar-fill" style="width:${Math.round(doneItems/progressItems.length*100)}%"></span></span>
            <span class="progress-label">${doneItems}/${progressItems.length} done</span>
          </div>`
       : '';
+
+    const SICON = { 'in-progress':'🟡','in-review':'🔄','blocked':'⛔','done':'✅','todo':'○' };
+    const CHECK_MINI = `<svg viewBox="0 0 10 8"><polyline points="1,4 4,7 9,1"/></svg>`;
 
     card.innerHTML = `
       <div class="task-top">
@@ -1595,6 +1646,7 @@
       </div>
       ${meta ? `<div class="task-meta">${meta}</div>` : ''}
       ${progressHtml}
+      ${children.length ? `<div class="project-task-list" id="ptl-${task.id}"></div>` : ''}
       ${extra || ''}`;
 
     card.querySelector('.task-checkbox').addEventListener('click', e => {
@@ -1605,6 +1657,49 @@
       saveTasks();
       renderBoard();
     });
+
+    // Render checkable child task rows
+    if (children.length) {
+      const list = card.querySelector(`#ptl-${task.id}`);
+      children.forEach(child => {
+        const isDone = child.done || child.status === 'done';
+        const row = document.createElement('div');
+        row.className = 'project-task-row' + (isDone ? ' ptask-done' : '');
+        row.dataset.childId = child.id;
+
+        const dayLabel = child.day && child.day !== 'unscheduled'
+          ? new Date(child.day + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'numeric', day: 'numeric' })
+          : '';
+
+        row.innerHTML = `
+          <div class="ptask-check ${isDone ? 'checked' : ''}">${CHECK_MINI}</div>
+          <span class="ptask-title">${escHtml(child.title)}</span>
+          <span class="ptask-status">${SICON[child.status || 'todo'] || '○'}</span>
+          ${dayLabel ? `<span class="ptask-day">${dayLabel}</span>` : ''}`;
+
+        row.querySelector('.ptask-check').addEventListener('click', e => {
+          e.stopPropagation();
+          child.done = !isDone;
+          child.status = child.done ? 'done' : (child.status === 'done' ? 'todo' : child.status);
+          child.lastUpdated = new Date().toISOString();
+          fetch(`/tasks/${child.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ done: child.done, status: child.status, lastUpdated: child.lastUpdated }),
+          }).catch(() => {});
+          saveTasks();
+          renderBoard();
+        });
+
+        row.addEventListener('click', e => {
+          if (e.target.closest('.ptask-check')) return;
+          e.stopPropagation();
+          openModal(child);
+        });
+
+        list.appendChild(row);
+      });
+    }
 
     addDragHandlers(card, task);
     card.addEventListener('click', () => openModal(task));
