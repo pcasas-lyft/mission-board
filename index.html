@@ -210,6 +210,24 @@
     .subtask-progress.all-done { border-color: var(--green); color: var(--green); background: rgba(74,222,128,0.08); }
     .has-notes-icon { font-size: 11px; color: var(--text-muted); }
 
+    /* ── Project progress bar (Active Projects band) ── */
+    .project-progress {
+      display: flex; align-items: center; gap: 6px;
+      margin: 4px 0 2px;
+    }
+    .progress-bar-wrap {
+      flex: 1; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden;
+    }
+    .progress-bar-fill {
+      height: 100%; background: var(--accent); border-radius: 2px;
+      transition: width 0.3s ease;
+    }
+    .project-progress.all-done .progress-bar-fill { background: var(--green); }
+    .progress-label {
+      font-size: 10px; font-weight: 600; color: var(--text-muted); white-space: nowrap;
+    }
+    .project-progress.all-done .progress-label { color: var(--green); }
+
     /* ── Status left-border on cards ── */
     .task-card[data-status="in-progress"]    { border-left: 3px solid var(--accent); }
     .task-card[data-status="in-review"]      { border-left: 3px solid var(--yellow); }
@@ -789,7 +807,7 @@
 
 <div class="ongoing-band" id="ongoingBand" style="display:none">
   <div class="ongoing-band-header">
-    <span class="ongoing-band-title">This Week</span>
+    <span class="ongoing-band-title">Active Projects</span>
     <span class="ongoing-band-count" id="ongoingCount"></span>
   </div>
   <div class="ongoing-band-cards" id="ongoingCards"></div>
@@ -841,8 +859,8 @@
     <div id="ongoingToggle" class="toggle-row">
       <div class="toggle-knob"></div>
       <div>
-        <div class="toggle-label">Spans all week</div>
-        <div class="toggle-sublabel">Shows in the "This Week" band — not tied to a single day</div>
+        <div class="toggle-label">Active Project</div>
+        <div class="toggle-sublabel">Lives in the Active Projects band — schedule work via subtasks</div>
       </div>
     </div>
 
@@ -1504,16 +1522,27 @@
 
     const { meta, extra } = buildMetaParts(task, true);
 
+    // Subtask progress pill
+    const subs = (task.subtasks || []).filter(s => s.text && s.text.trim());
+    const doneSubs = subs.filter(s => s.done).length;
+    const progressHtml = subs.length
+      ? `<div class="project-progress${doneSubs === subs.length ? ' all-done' : ''}">
+           <span class="progress-bar-wrap"><span class="progress-bar-fill" style="width:${Math.round(doneSubs/subs.length*100)}%"></span></span>
+           <span class="progress-label">${doneSubs}/${subs.length} done</span>
+         </div>`
+      : '';
+
     card.innerHTML = `
       <div class="task-top">
         <div class="task-checkbox">${CHECK_SVG}</div>
         <div class="task-title">${escHtml(task.title)}</div>
       </div>
       ${meta ? `<div class="task-meta">${meta}</div>` : ''}
+      ${progressHtml}
       ${extra || ''}
       <button class="active-dot-btn" title="Toggle working on this now">
         <div class="active-dot${task.activeNow ? ' on' : ''}"></div>
-        <span class="active-dot-label">${task.activeNow ? 'Working on this now' : 'Mark as active'}</span>
+        <span class="active-dot-label">${task.activeNow ? 'Active now' : 'Set active'}</span>
       </button>`;
 
     card.querySelector('.task-checkbox').addEventListener('click', e => {
@@ -1833,6 +1862,12 @@
     const notes = document.getElementById('taskNotes').value.trim();
     const subtasks = modalSubtasks.filter(s => s.text.trim()).map(s => ({ ...s, text: s.text.trim() }));
 
+    // Auto-promote to Active Project when subtasks are added
+    if (subtasks.length > 0 && !isOngoing) {
+      isOngoing = true;
+      updateOngoingToggleUI();
+    }
+
     let dayStr;
     if (isOngoing) {
       dayStr = 'unscheduled';
@@ -1894,11 +1929,13 @@
         };
         parentTask.subtasks = [...(parentTask.subtasks || []), newSub];
         parentTask.lastUpdated = new Date().toISOString();
+        // Auto-promote parent to Active Project when it gains its first subtask
+        if (!parentTask.ongoing) parentTask.ongoing = true;
         if (editingId) tasks = tasks.filter(t => t.id !== editingId);
         fetch(`/tasks/${parentTaskId}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ subtasks: parentTask.subtasks, lastUpdated: parentTask.lastUpdated }),
+          body: JSON.stringify({ subtasks: parentTask.subtasks, ongoing: parentTask.ongoing, lastUpdated: parentTask.lastUpdated }),
         });
         saveTasks();
         closeModal();
