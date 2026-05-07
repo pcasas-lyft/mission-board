@@ -882,6 +882,13 @@
       <input type="text" id="taskTitle" placeholder="What needs to get done?" />
     </div>
 
+    <div class="form-group" id="projectRow">
+      <label>Project</label>
+      <select id="projectSelect" class="parent-select">
+        <option value="">— No project —</option>
+      </select>
+    </div>
+
     <button type="button" class="details-toggle" id="detailsToggle">
       <span class="arr">▶</span> Details
     </button>
@@ -1773,11 +1780,23 @@
     modalSubtasks = task && task.subtasks ? task.subtasks.map(s => ({ ...s })) : [];
     renderModalSubtasks();
 
-    // Parent task picker — list all other tasks (prefer ongoing at top)
+    // Project picker — lists all Active Project tasks
+    const projectSelect = document.getElementById('projectSelect');
+    projectSelect.innerHTML = '<option value="">— No project —</option>';
+    const projects = tasks.filter(t => t.ongoing && !t.parentId && t.id !== (task && task.id));
+    projects.forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p.id;
+      opt.textContent = p.title;
+      if (task && task.parentId === p.id) opt.selected = true;
+      projectSelect.appendChild(opt);
+    });
+
+    // Parent task picker (convert to lightweight subtask) — list all other tasks
     const parentSelect = document.getElementById('parentTaskSelect');
     parentSelect.innerHTML = '<option value="">— Keep as standalone task —</option>';
     const parentRow = document.getElementById('parentTaskRow');
-    const candidates = tasks.filter(t => t.id !== (task && task.id));
+    const candidates = tasks.filter(t => t.id !== (task && task.id) && !t.parentId);
     candidates.sort((a, b) => (b.ongoing ? 1 : 0) - (a.ongoing ? 1 : 0));
     candidates.forEach(t => {
       const opt = document.createElement('option');
@@ -1963,8 +1982,9 @@
     const docs     = modalDocs.filter(d => d.url);
     const specLink = document.getElementById('taskSpecLink').value.trim();
     const blockedOn = status === 'blocked' ? document.getElementById('taskBlockedOn').value.trim() : '';
-    const jiraKey  = document.getElementById('taskJiraKey').value.trim().toUpperCase();
-    const done     = status === 'done';
+    const jiraKey    = document.getElementById('taskJiraKey').value.trim().toUpperCase();
+    const done       = status === 'done';
+    const selectedProjectId = document.getElementById('projectSelect').value;
     const parentTaskId = document.getElementById('parentTaskSelect').value;
 
     // ── Convert to subtask of another task ──────────────────
@@ -2003,6 +2023,7 @@
         const patch = {
           title, day: dayStr, priority, notes, ongoing: isOngoing, subtasks,
           status, done, prLink, prLinks, docs, specLink, blockedOn, jiraKey, log: modalLog,
+          parentId: selectedProjectId,           // '' clears it, id sets it
           claimedBy: status === 'done' ? '' : prev.claimedBy,
           lastUpdated: new Date().toISOString(),
         };
@@ -2023,7 +2044,7 @@
       const newTask = {
         id: `tmp-${Date.now()}`,   // optimistic id — replaced by server response
         title, day: dayStr, priority, notes,
-        ongoing: isOngoing, subtasks,
+        ongoing: isOngoing, subtasks, parentId: selectedProjectId,
         status, done, prLink, prLinks, docs, specLink, blockedOn, jiraKey, log: modalLog,
         createdAt: new Date().toISOString(),
         lastUpdated: new Date().toISOString(),
