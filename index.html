@@ -1812,8 +1812,7 @@
         meta += `<span class="jira-badge">${escHtml(task.jiraKey)}</span>`;
       }
     }
-    if (task.claimedBy && task.claimedBy.trim()) {
-      meta += `<span class="claimed-badge" title="Claimed by ${escHtml(task.claimedBy)}">🔒</span>`;
+    if (false && task.claimedBy) { // claimedBy no longer displayed — kept in data for agent context only
     }
     if (task.notes && task.notes.trim()) {
       meta += `<span class="has-notes-icon">📝</span>`;
@@ -2133,7 +2132,7 @@
           title, day: dayStr, priority, notes, ongoing: isOngoing, subtasks,
           status, done, prLink, prLinks, docs, specLink, blockedOn, jiraKey, log: modalLog,
           parentId: selectedProjectId,           // '' clears it, id sets it
-          claimedBy: status === 'done' ? '' : prev.claimedBy,
+          claimedBy: prev.claimedBy, // preserved but no longer used as a lock
           lastUpdated: new Date().toISOString(),
         };
         // Optimistic local update

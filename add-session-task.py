@@ -64,14 +64,10 @@ def main():
     write_session_tasks(branch, current + [task_id])
 
     # Patch to in-progress + claimedBy if not already
-    needs_patch = (
-        task.get('status') not in ('in-progress',) or
-        task.get('claimedBy') != branch
-    )
+    needs_patch = task.get('status') not in ('in-progress',)
     if needs_patch:
         patch = {
             'status':      'in-progress',
-            'claimedBy':   branch,
             'lastUpdated': datetime.now(timezone.utc).isoformat(),
         }
         req = urllib.request.Request(

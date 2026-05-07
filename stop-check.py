@@ -66,17 +66,16 @@ def main():
             f'# {t["title"]} (id: {t["id"]})\n'
             f'update_task(id="{t["id"]}", status="in-review",\n'
             f'  notes="Done: ...\\nNext: ...",\n'
-            f'  pr_links=[{{"url":"<PR URL>","label":"<repo #N>"}}],\n'
-            f'  claimed_by="")'
+            f'  pr_links=[{{"url":"<PR URL>","label":"<repo #N>"}}])'
         )
 
     print(json.dumps({
         'decision': 'block',
         'reason': (
             f'{len(pending)} {task_word} still in-progress: {titles}\n\n'
-            f'Please update before finishing:\n\n'
+            f'Log your progress before finishing:\n\n'
             + '\n\n'.join(updates)
-            + '\n\nIf still in progress, update notes with current state and set claimed_by="".'
+            + '\n\nIf work is ongoing, update notes with current state — another agent may continue.'
         ),
     }))
 

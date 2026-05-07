@@ -169,12 +169,14 @@ def main():
         "\n⚠️  YOU ARE ON MAIN — before doing any work:\n"
         "1. Call search_tasks with keywords from the user's request.\n"
         "2. If a match is found, say: \"This looks like [task title] — "
-        "want me to continue from that task? It has a worktree at [path].\"\n"
+        "want me to continue from that? It has a worktree at [path].\"\n"
         "3. If yes: use absolute paths to that worktree for all file reads, "
         "edits, and git commands (e.g. cd [path] && git status). "
-        "Link the task with: python3 " + INSTALL_DIR + "/add-session-task.py <id>\n"
-        "4. If no: create a new task with create_task, then proceed.\n"
-        "5. If no match: ask the user what they're working on before starting."
+        "Link the task: python3 " + INSTALL_DIR + "/add-session-task.py <id>\n"
+        "   Multiple agents can work on the same task — no locking.\n"
+        "4. If no match or new work: create_task first, then proceed.\n"
+        "5. For branch-level work under an existing task, create a child task\n"
+        "   (same project, descriptive title) rather than reusing the parent."
     ) if on_main else ''
 
     parts.append(
@@ -186,10 +188,13 @@ def main():
         "  create_task         — add a task if none exists\n"
         "  update_task         — change status, notes, prLinks, claimedBy\n"
         + main_branch_instructions + "\n\n"
+        "Tasks are shared ledgers — multiple agents/branches can contribute.\n"
+        "Log progress to the most specific task for your work (child task if one exists).\n\n"
         "When finishing work, update_task with:\n"
         '  status="in-review", notes="Done: ...\\nNext: ...",\n'
-        '  prLinks=[{"url":"https://github.com/…","label":"repo #N"}],\n'
-        '  claimedBy=""\n\n'
+        '  pr_links=[{"url":"https://github.com/…","label":"repo #N"}]\n\n'
+        "If work is ongoing and another agent may continue, update notes with\n"
+        "current state so they have full context.\n\n"
         "Multi-task sessions: if you pivot to new work mid-session, check\n"
         "list_tasks for a match and ask the user before linking it:\n"
         f"  python3 {INSTALL_DIR}/add-session-task.py <id>"

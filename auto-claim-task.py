@@ -86,10 +86,11 @@ def main():
 
     task_id = task.get('id')
 
+    # Don't lock — multiple agents can work on the same task.
+    # Only set status to in-progress; don't touch claimedBy.
     patch = {
         'status': 'in-progress',
         'done': False,
-        'claimedBy': branch,
         'lastUpdated': datetime.now(timezone.utc).isoformat(),
     }
     body = json.dumps(patch).encode()
