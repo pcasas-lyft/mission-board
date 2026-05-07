@@ -2074,6 +2074,10 @@
     const title = document.getElementById('taskTitle').value.trim();
     if (!title) { document.getElementById('taskTitle').focus(); return; }
 
+    // Read project/parent selects early — used in auto-promote logic below
+    const selectedProjectId = document.getElementById('projectSelect').value;
+    const parentTaskId = document.getElementById('parentTaskSelect').value;
+
     const priority = document.getElementById('taskPriority').value;
     const notes = document.getElementById('taskNotes').value.trim();
     const subtasks = modalSubtasks.filter(s => s.text.trim()).map(s => ({ ...s, text: s.text.trim() }));
@@ -2132,9 +2136,6 @@
     const blockedOn = status === 'blocked' ? document.getElementById('taskBlockedOn').value.trim() : '';
     const jiraKey    = document.getElementById('taskJiraKey').value.trim().toUpperCase();
     const done       = status === 'done';
-    const selectedProjectId = document.getElementById('projectSelect').value;
-    const parentTaskId = document.getElementById('parentTaskSelect').value;
-
     // ── Convert to subtask of another task ──────────────────
     if (parentTaskId) {
       const parentTask = tasks.find(t => t.id === parentTaskId);
