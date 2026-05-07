@@ -8,7 +8,7 @@ it and prompts for an update when the session ends.
 
 Usage: python3 add-session-task.py <task_id>
 """
-import json, os, sys, subprocess, urllib.request
+import json, os, sys, subprocess, urllib.request, re
 from datetime import datetime, timezone
 
 INSTALL_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -89,6 +89,23 @@ def main():
     all_ids = current + [task_id]
     print(f'✓ Linked "{task["title"]}" to this session.')
     print(f'  Session now tracks {len(all_ids)} task{"s" if len(all_ids) != 1 else ""}: {", ".join(all_ids)}')
+
+    # If the task has a worktree, print its path so the agent can use it immediately
+    claimed_branch = task.get('claimedBy') or branch
+    if claimed_branch and claimed_branch not in ('main', 'master', ''):
+        try:
+            r = subprocess.run(['git', 'worktree', 'list', '--porcelain'],
+                               capture_output=True, text=True, timeout=5)
+            for block in r.stdout.strip().split('\n\n'):
+                lines = block.splitlines()
+                wt_path = next((l[9:] for l in lines if l.startswith('worktree ')), None)
+                wt_branch = next((l[len('branch refs/heads/'):] for l in lines if l.startswith('branch refs/heads/')), None)
+                if wt_branch == claimed_branch and wt_path:
+                    print(f'  📁 worktree: {wt_path}')
+                    print(f'     Use absolute paths, e.g.: cd {wt_path} && git status')
+                    break
+        except Exception:
+            pass
 
 
 if __name__ == '__main__':

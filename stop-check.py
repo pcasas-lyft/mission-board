@@ -60,16 +60,14 @@ def main():
 
     task_word = 'task' if len(pending) == 1 else 'tasks'
     titles = ', '.join(f'"{t["title"]}"' for t in pending)
-    curls = []
+    updates = []
     for t in pending:
-        curls.append(
-            f'# {t["title"]} ({t["id"]})\n'
-            f'curl -s -X PATCH {BASE_URL}/tasks/{t["id"]} \\\n'
-            f'  -H "Content-Type: application/json" \\\n'
-            f'  -d \'{{"status":"in-review",'
-            f'"notes":"Done: ...\\nNext: ...",'
-            f'"prLinks":[{{"url":"<PR>","label":"<repo #N>"}}],'
-            f'"claimedBy":"","lastUpdated":"<ISO>"}}\''
+        updates.append(
+            f'# {t["title"]} (id: {t["id"]})\n'
+            f'update_task(id="{t["id"]}", status="in-review",\n'
+            f'  notes="Done: ...\\nNext: ...",\n'
+            f'  pr_links=[{{"url":"<PR URL>","label":"<repo #N>"}}],\n'
+            f'  claimed_by="")'
         )
 
     print(json.dumps({
@@ -77,8 +75,8 @@ def main():
         'reason': (
             f'{len(pending)} {task_word} still in-progress: {titles}\n\n'
             f'Please update before finishing:\n\n'
-            + '\n\n'.join(curls)
-            + '\n\nIf still in progress, update notes with current state and set claimedBy: "".'
+            + '\n\n'.join(updates)
+            + '\n\nIf still in progress, update notes with current state and set claimed_by="".'
         ),
     }))
 
