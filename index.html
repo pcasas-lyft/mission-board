@@ -99,8 +99,8 @@
       border: 1px solid var(--purple);
       border-radius: var(--radius);
       padding: 10px 12px;
-      min-width: 200px;
-      max-width: 240px;
+      min-width: 220px;
+      max-width: 280px;
       cursor: pointer;
       flex-shrink: 0;
       transition: border-color 0.15s, background 0.15s;
@@ -112,6 +112,38 @@
     .ongoing-card.done .task-title { text-decoration: line-through; color: var(--done-text); }
     .ongoing-card .task-top { display: flex; align-items: flex-start; gap: 8px; }
     .ongoing-card .task-title { font-size: 13px; font-weight: 500; line-height: 1.4; flex: 1; word-break: break-word; }
+
+    /* ── Child tasks inside a project card ── */
+    .project-children {
+      margin: 6px 0 4px;
+      display: flex; flex-direction: column; gap: 3px;
+    }
+    .project-child {
+      display: flex; align-items: center; gap: 6px;
+      padding: 3px 6px; border-radius: 4px;
+      background: rgba(0,0,0,0.15); cursor: pointer;
+      transition: background 0.12s;
+    }
+    .project-child:hover { background: rgba(255,255,255,0.06); }
+    .project-child.child-done .child-title { text-decoration: line-through; color: var(--done-text); }
+    .child-status-icon { font-size: 11px; flex-shrink: 0; }
+    .child-title { font-size: 11px; color: var(--text2); flex: 1; line-height: 1.3; }
+    .child-pr {
+      font-size: 10px; color: var(--accent); text-decoration: none;
+      border: 1px solid var(--accent-dim); border-radius: 3px; padding: 0 4px;
+      white-space: nowrap; flex-shrink: 0;
+    }
+    .child-pr:hover { background: rgba(139,92,246,0.15); }
+    .child-jira {
+      font-size: 10px; color: var(--blue); text-decoration: none;
+      white-space: nowrap; flex-shrink: 0; opacity: 0.7;
+    }
+    /* Parent badge on task cards in day columns */
+    .parent-project-badge {
+      font-size: 10px; color: var(--purple); background: rgba(192,132,252,0.12);
+      border: 1px solid rgba(192,132,252,0.3); border-radius: 3px;
+      padding: 0 5px; white-space: nowrap;
+    }
 
     /* Active now indicator */
     .active-dot-btn {
@@ -1347,7 +1379,7 @@
       board.appendChild(col);
     });
 
-    // Unscheduled column
+    // Unscheduled column — all non-ongoing tasks without a day (including project children)
     const unscheduled = tasks.filter(t => !t.ongoing && t.day === 'unscheduled')
       .sort((a, b) => (a.done ? 1 : 0) - (b.done ? 1 : 0));
     const pending = unscheduled.filter(t => !t.done).length;
@@ -1391,7 +1423,8 @@
   }
 
   function renderOngoingBand() {
-    const ongoing = tasks.filter(t => t.ongoing);
+    // Only top-level project cards — tasks with a parentId are shown inside their parent
+    const ongoing = tasks.filter(t => t.ongoing && !t.parentId);
     const band = document.getElementById('ongoingBand');
     const cardsEl = document.getElementById('ongoingCards');
     const countEl = document.getElementById('ongoingCount');
@@ -1478,13 +1511,19 @@
 
     const { meta, extra } = buildMetaParts(task, false);
 
+    // Parent project badge — shown when this task belongs to a project
+    const parentProject = task.parentId ? tasks.find(t => t.id === task.parentId) : null;
+    const parentBadgeHtml = parentProject
+      ? `<span class="parent-project-badge">↳ ${escHtml(parentProject.title)}</span>`
+      : '';
+
     const lastLog = task.log && task.log.length ? task.log[task.log.length - 1] : null;
     card.innerHTML = `
       <div class="task-top">
         <div class="task-checkbox">${CHECK_SVG}</div>
         <div class="task-title">${escHtml(task.title)}</div>
       </div>
-      ${meta ? `<div class="task-meta">${meta}</div>` : ''}
+      ${(meta || parentBadgeHtml) ? `<div class="task-meta">${parentBadgeHtml}${meta}</div>` : ''}
       ${extra || ''}
       ${lastLog && !task.done ? `<div class="card-log-entry">${escHtml(lastLog.text)}</div>` : ''}
       ${task.subtasks && task.subtasks.length > 0 ? `<div class="card-subtasks"></div>` : ''}`;
@@ -1528,13 +1567,17 @@
 
     const { meta, extra } = buildMetaParts(task, true);
 
-    // Subtask progress pill
+    // Progress bar — based on child tasks (full tasks with parentId) or lightweight subtasks
+    const children = tasks.filter(t => t.parentId === task.id);
     const subs = (task.subtasks || []).filter(s => s.text && s.text.trim());
-    const doneSubs = subs.filter(s => s.done).length;
-    const progressHtml = subs.length
-      ? `<div class="project-progress${doneSubs === subs.length ? ' all-done' : ''}">
-           <span class="progress-bar-wrap"><span class="progress-bar-fill" style="width:${Math.round(doneSubs/subs.length*100)}%"></span></span>
-           <span class="progress-label">${doneSubs}/${subs.length} done</span>
+    const progressItems = children.length ? children : subs;
+    const doneItems = children.length
+      ? children.filter(c => c.done || c.status === 'done').length
+      : subs.filter(s => s.done).length;
+    const progressHtml = progressItems.length
+      ? `<div class="project-progress${doneItems === progressItems.length ? ' all-done' : ''}">
+           <span class="progress-bar-wrap"><span class="progress-bar-fill" style="width:${Math.round(doneItems/progressItems.length*100)}%"></span></span>
+           <span class="progress-label">${doneItems}/${progressItems.length} done</span>
          </div>`
       : '';
 
