@@ -66,8 +66,7 @@ def task_line(t, show_day=False, jira_base=''):
         if url:
             label = doc.get('title') or doc.get('type') or 'Doc'
             parts.append(f"· [📎 {label}]({url})")
-    if t.get('claimedBy'):
-        parts.append(f"· 🔒 `{t['claimedBy']}`")
+    # claimedBy is no longer used as a lock (tasks are shared ledgers)
     line = ' '.join(parts)
 
     details = []
@@ -189,7 +188,6 @@ def main():
         '  "notes": "Done: X\\nNext: Y",',
         '  "prLinks": [{"url": "https://github.com/...", "label": "repo #N"}],',
         '  "blockedOn": "",',
-        '  "claimedBy": "",',
         '  "lastUpdated": "<ISO timestamp>"',
         '}',
         "```",

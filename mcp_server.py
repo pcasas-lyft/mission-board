@@ -123,6 +123,16 @@ def update_task(args):
     return _patch(f"/tasks/{task_id}", updates)
 
 
+def log_entry(args):
+    task_id = args.get("id")
+    if not task_id:
+        raise ValueError("id is required")
+    text = args.get("text", "").strip()
+    if not text:
+        raise ValueError("text is required")
+    return _patch(f"/tasks/{task_id}/log", {"text": text})
+
+
 # ── MCP protocol (JSON-RPC 2.0 over stdio) ────────────────────────────────────
 
 TOOLS = [
@@ -195,7 +205,6 @@ TOOLS = [
                 },
                 "notes": {"type": "string"},
                 "blockedOn": {"type": "string"},
-                "claimedBy": {"type": "string"},
                 "jiraKey": {"type": "string"},
                 "prLinks": {
                     "type": "array",
@@ -212,6 +221,18 @@ TOOLS = [
             "required": ["id"],
         },
     },
+    {
+        "name": "log_entry",
+        "description": "Append a timestamped log entry to a task's activity log. Use this to record significant progress, decisions, or handoff notes without replacing the notes field.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "id": {"type": "string", "description": "Task ID"},
+                "text": {"type": "string", "description": "Log entry text (1-2 sentences describing what happened)"},
+            },
+            "required": ["id", "text"],
+        },
+    },
 ]
 
 TOOL_FNS = {
@@ -220,6 +241,7 @@ TOOL_FNS = {
     "search_tasks": search_tasks,
     "create_task": create_task,
     "update_task": update_task,
+    "log_entry": log_entry,
 }
 
 

@@ -8,14 +8,14 @@ SessionStart hook — injects live work status into every agent session.
 4. If on main, lists all active worktrees so the agent can work via
    absolute paths and proactively match the user's prompt to a task.
 """
-import json, os, sys, subprocess, urllib.request
+import json, os, sys, subprocess, urllib.request, glob
 
 INSTALL_DIR = os.path.dirname(os.path.abspath(__file__))
 STATUS_FILE = os.path.normpath(os.path.join(INSTALL_DIR, '..', 'WORKSTATUS.md'))
 BASE_URL = 'http://localhost:3456'
 
 sys.path.insert(0, INSTALL_DIR)
-from lib import read_session_tasks
+from lib import read_session_tasks, session_task_file
 
 
 def get_branch():
@@ -120,6 +120,7 @@ def load_session_context(task_ids, worktrees):
 def load_worktree_context(worktrees):
     """
     When on main: list all active worktrees cross-referenced with tasks.
+    Uses session task files (not claimedBy) to match branches to tasks.
     This lets the agent work via absolute paths without needing to cd.
     """
     if not worktrees:
@@ -132,14 +133,19 @@ def load_worktree_context(worktrees):
 
     lines = ['━━━ ACTIVE WORKTREES (you are on main) ━━━']
     for branch, path in worktrees.items():
-        task = next((t for t in tasks if t.get('claimedBy') == branch), None)
-        if task:
-            status = task.get('status', 'todo')
-            lines.append(f'• [{status.upper()}] {task["title"]}')
-            lines.append(f'  id:     {task["id"]}')
-            lines.append(f'  branch: {branch}')
-            lines.append(f'  path:   {path}')
+        # Look up tasks via session task file — claimedBy is no longer used as a lock
+        branch_task_ids = read_session_tasks(branch)
+        branch_tasks = [t for t in tasks if t.get('id') in branch_task_ids]
+
+        if branch_tasks:
+            for task in branch_tasks:
+                status = task.get('status', 'todo')
+                lines.append(f'• [{status.upper()}] {task["title"]}')
+                lines.append(f'  id:     {task["id"]}')
+                lines.append(f'  branch: {branch}')
+                lines.append(f'  path:   {path}')
         else:
+            # Fallback: show worktree even without a known task
             lines.append(f'• {branch}  →  {path}  (no linked task)')
 
     if len(lines) == 1:

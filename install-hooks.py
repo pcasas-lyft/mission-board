@@ -20,10 +20,6 @@ def main():
             "command": f"python3 {install_dir}/session-start.py",
             "statusMessage": "Loading work status...",
         }]}],
-        "WorktreeRemove": [{"matcher": "", "hooks": [{"type": "command",
-            "command": f"python3 {install_dir}/auto-unclaim-task.py",
-            "statusMessage": "Releasing task claim..."
-        }]}],
         "WorktreeCreate": [{"matcher": "", "hooks": [{"type": "command",
             "command": f"python3 {install_dir}/auto-claim-task.py",
             "statusMessage": "Linking branch to task..."
@@ -32,6 +28,16 @@ def main():
             "command": f"bash {install_dir}/on-stop.sh",
             "statusMessage": "Updating task status..."
         }]}],
+        "PostToolUse": [
+            {"matcher": "Bash", "hooks": [{"type": "command",
+                "command": f"python3 {install_dir}/git-push-hook.py",
+                "statusMessage": "Checking for PR links..."
+            }]},
+            {"matcher": "WebFetch", "hooks": [{"type": "command",
+                "command": f"python3 {install_dir}/doc-link-hook.py",
+                "statusMessage": "Checking for doc links..."
+            }]},
+        ],
     }
 
     settings_path = os.path.expanduser("~/.claude/settings.json")

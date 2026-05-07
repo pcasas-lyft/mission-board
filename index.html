@@ -175,11 +175,11 @@
       background: var(--border); flex-shrink: 0; transition: background 0.2s;
     }
     .active-dot.on { background: var(--green); box-shadow: 0 0 0 3px rgba(74,222,128,0.2); }
-    @keyframes pulse {
+    @keyframes pulse-glow {
       0%, 100% { box-shadow: 0 0 0 2px rgba(74,222,128,0.3); }
       50%       { box-shadow: 0 0 0 5px rgba(74,222,128,0.08); }
     }
-    .active-dot.on { animation: pulse 2s infinite; }
+    .active-dot.on { animation: pulse-glow 2s infinite; }
     .active-dot-label { font-size: 11px; color: var(--text-muted); transition: color 0.2s; }
     .active-dot-btn:hover .active-dot-label { color: var(--text); }
     .active-now .active-dot-label { color: var(--green); font-weight: 600; }
@@ -1195,23 +1195,37 @@
 
   // Debounced save — coalesces rapid calls (e.g. quick subtask toggles) into one request
   let _saveTimer = null;
-  function saveTasks() {
+  let _dirtyIds = new Set();
+
+  function saveTasks(taskId) {
+    if (taskId) _dirtyIds.add(taskId);
     clearTimeout(_saveTimer);
     setSyncState('saving');
     _saveTimer = setTimeout(_doSave, 300);
   }
 
   async function _doSave() {
+    const ids = [..._dirtyIds];
+    _dirtyIds.clear();
+    if (ids.length === 0) {
+      setSyncState('saved');
+      return;
+    }
     try {
-      _sseIgnoreNext = true; // this tab already has the latest state
-      await fetch('/tasks', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(tasks),
-      });
+      // PATCH each dirty task individually — safe against concurrent agent writes
+      _sseIgnoreCount += ids.length;
+      await Promise.all(ids.map(id => {
+        const task = tasks.find(t => t.id === id);
+        if (!task) return Promise.resolve();
+        return fetch(`/tasks/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(task),
+        });
+      }));
       setSyncState('saved');
     } catch {
-      _sseIgnoreNext = false;
+      _sseIgnoreCount = 0;
       localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
       setSyncState('error');
     }
@@ -1308,7 +1322,7 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ subtasks: parentTask.subtasks, lastUpdated: parentTask.lastUpdated }),
         }).catch(() => {});
-        saveTasks();
+        saveTasks(parentId);
         renderBoard();
         return;
       }
@@ -1322,7 +1336,8 @@
         task.ongoing = false;
         task.day = targetDay;
       }
-      saveTasks();
+      task.lastUpdated = new Date().toISOString();
+      saveTasks(task.id);
       renderBoard();
     });
   }
@@ -1563,6 +1578,7 @@
       // Move dragged task to same column as target
       draggedTask.ongoing = task.ongoing;
       draggedTask.day = task.day;
+      draggedTask.lastUpdated = new Date().toISOString();
 
       // Reorder in array
       const fromIdx = tasks.findIndex(t => t.id === draggedId);
@@ -1570,7 +1586,7 @@
       const toIdx = tasks.findIndex(t => t.id === task.id);
       tasks.splice(insertBefore ? toIdx : toIdx + 1, 0, draggedTask);
 
-      saveTasks();
+      saveTasks(draggedId);
       renderBoard();
     });
   }
@@ -1605,7 +1621,7 @@
       task.done = !task.done;
       task.status = task.done ? 'done' : (task.status === 'done' ? 'todo' : task.status);
       task.lastUpdated = new Date().toISOString();
-      saveTasks();
+      saveTasks(task.id);
       renderBoard();
     });
 
@@ -1620,7 +1636,8 @@
         row.querySelector('.card-st-box').addEventListener('click', e => {
           e.stopPropagation();
           st.done = !st.done;
-          saveTasks();
+          task.lastUpdated = new Date().toISOString();
+          saveTasks(task.id);
           renderBoard();
         });
         stContainer.appendChild(row);
@@ -1677,7 +1694,7 @@
       task.done = !task.done;
       task.status = task.done ? 'done' : (task.status === 'done' ? 'todo' : task.status);
       task.lastUpdated = new Date().toISOString();
-      saveTasks();
+      saveTasks(task.id);
       renderBoard();
     });
 
@@ -1710,7 +1727,7 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ done: child.done, status: child.status, lastUpdated: child.lastUpdated }),
           }).catch(() => {});
-          saveTasks();
+          saveTasks(child.id);
           renderBoard();
         });
 
@@ -1747,7 +1764,7 @@
       e.stopPropagation();
       subtask.done = !subtask.done;
       parentTask.lastUpdated = new Date().toISOString();
-      saveTasks();
+      saveTasks(parentTask.id);
       renderBoard();
     });
 
@@ -2115,7 +2132,7 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ subtasks: parentTask.subtasks, ongoing: parentTask.ongoing, lastUpdated: parentTask.lastUpdated }),
         });
-        saveTasks();
+        saveTasks(parentTaskId);
         closeModal();
         renderBoard();
         return;
@@ -2442,10 +2459,12 @@
 
   // Live sync — reconnects automatically if the server restarts
   let _sseIgnoreNext = false;
+  let _sseIgnoreCount = 0;   // for batched PATCH operations that fire multiple SSE events
   function connectSSE() {
     const es = new EventSource('/events');
     es.onmessage = () => {
       if (_sseIgnoreNext) { _sseIgnoreNext = false; return; }
+      if (_sseIgnoreCount > 0) { _sseIgnoreCount--; return; }
       loadTasks();
     };
     es.onerror = () => {

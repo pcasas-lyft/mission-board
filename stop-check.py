@@ -7,7 +7,7 @@ asks the agent to update all of them before the session closes.
 
 Uses a flag file to avoid blocking more than once per session end sequence.
 """
-import json, os, sys, urllib.request
+import json, os, sys, subprocess, urllib.request
 
 INSTALL_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, INSTALL_DIR)
@@ -16,8 +16,26 @@ from lib import session_task_file, read_session_tasks
 BASE_URL = 'http://localhost:3456'
 
 
+def get_branch_fallback():
+    """Fallback: detect branch via git when not passed as argument."""
+    try:
+        r = subprocess.run(
+            ['git', 'rev-parse', '--abbrev-ref', 'HEAD'],
+            capture_output=True, text=True, timeout=5,
+        )
+        if r.returncode == 0:
+            return r.stdout.strip()
+    except Exception:
+        pass
+    return ''
+
+
 def main():
     branch = sys.argv[1] if len(sys.argv) > 1 else ''
+
+    # Fallback: detect branch via git if not passed or empty
+    if not branch or branch in ('HEAD',):
+        branch = get_branch_fallback()
 
     if not branch or branch in ('HEAD', 'main', 'master', ''):
         return

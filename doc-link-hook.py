@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 
 INSTALL_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, INSTALL_DIR)
-from lib import session_task_file
+from lib import read_session_tasks
 
 BASE_URL = 'http://localhost:3456'
 
@@ -101,21 +101,9 @@ def get_branch():
     return ''
 
 
-def find_task_id(branch):
-    tf = session_task_file(branch)
-    if os.path.exists(tf):
-        tid = open(tf).read().strip()
-        if tid:
-            return tid
-    try:
-        with urllib.request.urlopen(f'{BASE_URL}/tasks', timeout=3) as r:
-            tasks = json.loads(r.read())
-        task = next((t for t in tasks if t.get('claimedBy') == branch), None)
-        if task:
-            return task['id']
-    except Exception:
-        pass
-    return None
+def find_task_ids(branch):
+    """Return all task IDs linked to this session (supports multi-task sessions)."""
+    return read_session_tasks(branch)
 
 
 def main():
@@ -142,15 +130,18 @@ def main():
     if not branch:
         return
 
-    task_id = find_task_id(branch)
-    if not task_id:
+    task_ids = find_task_ids(branch)
+    if not task_ids:
         return
+
+    # Use the first (most recently started) task in the session
+    task_id = task_ids[-1]
 
     # Fetch all tasks and find this one
     try:
         with urllib.request.urlopen(f'{BASE_URL}/tasks', timeout=3) as r:
-            tasks = json.loads(r.read())
-        task = next((t for t in tasks if t.get('id') == task_id), None)
+            all_tasks = json.loads(r.read())
+        task = next((t for t in all_tasks if t.get('id') == task_id), None)
         if not task:
             return
     except Exception:

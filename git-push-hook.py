@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 
 INSTALL_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, INSTALL_DIR)
-from lib import session_task_file
+from lib import read_session_tasks
 
 BASE_URL = 'http://localhost:3456'
 GH_PR_RE = re.compile(r'https://github\.com/[^\s\'"]+/pull/\d+')
@@ -36,22 +36,9 @@ def get_branch():
     return ''
 
 
-def find_task_id(branch):
-    """Try session file first, then claimedBy."""
-    tf = session_task_file(branch)
-    if os.path.exists(tf):
-        tid = open(tf).read().strip()
-        if tid:
-            return tid
-    try:
-        with urllib.request.urlopen(f'{BASE_URL}/tasks', timeout=3) as r:
-            tasks = json.loads(r.read())
-        task = next((t for t in tasks if t.get('claimedBy') == branch), None)
-        if task:
-            return task['id']
-    except Exception:
-        pass
-    return None
+def find_task_ids(branch):
+    """Return all task IDs linked to this session (supports multi-task sessions)."""
+    return read_session_tasks(branch)
 
 
 def main():
@@ -84,55 +71,60 @@ def main():
     if not branch:
         return
 
-    task_id = find_task_id(branch)
-    if not task_id:
+    task_ids = find_task_ids(branch)
+    if not task_ids:
         return
 
-    # Fetch all tasks and find the current one to merge cleanly
+    # Fetch all tasks once
     try:
         with urllib.request.urlopen(f'{BASE_URL}/tasks', timeout=3) as r:
-            tasks = json.loads(r.read())
-        task = next((t for t in tasks if t.get('id') == task_id), None)
+            all_tasks = json.loads(r.read())
+    except Exception:
+        return
+
+    messages = []
+    for task_id in task_ids:
+        task = next((t for t in all_tasks if t.get('id') == task_id), None)
         if not task:
-            return
-    except Exception:
-        return
+            continue
 
-    existing = {p['url'] for p in (task.get('prLinks') or [])}
-    if task.get('prLink'):
-        existing.add(task['prLink'])
+        existing = {p['url'] for p in (task.get('prLinks') or [])}
+        if task.get('prLink'):
+            existing.add(task['prLink'])
 
-    new_links = list(task.get('prLinks') or [])
-    added = []
-    for url in pr_urls:
-        if url not in existing:
-            new_links.append({'url': url, 'label': pr_label(url)})
-            existing.add(url)
-            added.append(url)
+        new_links = list(task.get('prLinks') or [])
+        added = []
+        for url in pr_urls:
+            if url not in existing:
+                new_links.append({'url': url, 'label': pr_label(url)})
+                existing.add(url)
+                added.append(url)
 
-    if not added:
-        return  # All URLs already tracked
+        if not added:
+            continue
 
-    patch = {
-        'prLinks': new_links,
-        'prLink': new_links[0]['url'] if new_links else '',
-        'lastUpdated': datetime.now(timezone.utc).isoformat(),
-    }
-    req = urllib.request.Request(
-        f'{BASE_URL}/tasks/{task_id}',
-        data=json.dumps(patch).encode(),
-        headers={'Content-Type': 'application/json'},
-        method='PATCH',
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=3):
-            pass
-    except Exception:
-        return
+        patch = {
+            'prLinks': new_links,
+            'prLink': new_links[0]['url'] if new_links else '',
+            'lastUpdated': datetime.now(timezone.utc).isoformat(),
+        }
+        req = urllib.request.Request(
+            f'{BASE_URL}/tasks/{task_id}',
+            data=json.dumps(patch).encode(),
+            headers={'Content-Type': 'application/json'},
+            method='PATCH',
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=3):
+                pass
+            messages.append(f'"{task["title"]}": {", ".join(added)}')
+        except Exception:
+            continue
 
-    print(json.dumps({
-        'systemMessage': f'🔗 Auto-linked PR{"s" if len(added) > 1 else ""} to task "{task["title"]}": {", ".join(added)}'
-    }))
+    if messages:
+        print(json.dumps({
+            'systemMessage': f'🔗 Auto-linked PR{"s" if len(pr_urls) > 1 else ""} → ' + '; '.join(messages)
+        }))
 
 
 if __name__ == '__main__':
