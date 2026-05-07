@@ -1047,27 +1047,43 @@
   }
 
   const ROLLOVER_DATE_KEY = 'lastRolloverDate';
-  let _rolloverUndo = null;  // { originals: [{id, day}] }
+  let _rolloverUndo = null;  // { originals: [{id, day}], subtaskOriginals: [{parentId, subtaskId, day}] }
 
   function rolloverPastTasks() {
     const today = formatDate(new Date());
     if (localStorage.getItem(ROLLOVER_DATE_KEY) === today) return;
 
+    // Top-level tasks with a past day
     const toRoll = tasks.filter(t =>
       !t.done && !t.ongoing && t.day && t.day !== 'unscheduled' && t.day < today
     );
 
+    // Subtasks with a past day
+    const subtaskRolls = [];
+    tasks.forEach(parentTask => {
+      (parentTask.subtasks || []).forEach(st => {
+        if (!st.done && st.day && st.day !== 'unscheduled' && st.day < today) {
+          subtaskRolls.push({ parentTask, subtask: st, origDay: st.day });
+        }
+      });
+    });
+
     localStorage.setItem(ROLLOVER_DATE_KEY, today);
-    if (toRoll.length === 0) return;
+    if (toRoll.length === 0 && subtaskRolls.length === 0) return;
 
     // Save originals for undo
-    _rolloverUndo = { originals: toRoll.map(t => ({ id: t.id, day: t.day })) };
+    _rolloverUndo = {
+      originals: toRoll.map(t => ({ id: t.id, day: t.day })),
+      subtaskOriginals: subtaskRolls.map(({ parentTask, subtask, origDay }) => ({
+        parentId: parentTask.id, subtaskId: subtask.id, day: origDay,
+      })),
+    };
 
-    // Update in memory and patch server
     const now = new Date().toISOString();
+
+    // Roll top-level tasks
     toRoll.forEach(t => {
-      t.day = today;
-      t.lastUpdated = now;
+      t.day = today; t.lastUpdated = now;
       fetch(`/tasks/${t.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -1075,7 +1091,22 @@
       }).catch(() => {});
     });
 
-    const n = toRoll.length;
+    // Roll subtasks — group by parent to minimise PATCHes
+    const parentsToUpdate = new Map();
+    subtaskRolls.forEach(({ parentTask, subtask }) => {
+      subtask.day = today;
+      parentsToUpdate.set(parentTask.id, parentTask);
+    });
+    parentsToUpdate.forEach((parentTask, parentId) => {
+      parentTask.lastUpdated = now;
+      fetch(`/tasks/${parentId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subtasks: parentTask.subtasks, lastUpdated: now }),
+      }).catch(() => {});
+    });
+
+    const n = toRoll.length + subtaskRolls.length;
     showUndoToast(`↩ ${n} unfinished task${n !== 1 ? 's' : ''} rolled over to today`);
   }
 
@@ -1179,6 +1210,26 @@
       e.preventDefault();
       el.classList.remove('drag-over');
       const id = e.dataTransfer.getData('text/plain');
+
+      // Subtask drag: encoded as "subtask:<parentId>:<subtaskId>"
+      if (id.startsWith('subtask:')) {
+        const [, parentId, subtaskId] = id.split(':');
+        const parentTask = tasks.find(t => t.id === parentId);
+        if (!parentTask) return;
+        const subtask = (parentTask.subtasks || []).find(s => s.id === subtaskId);
+        if (!subtask) return;
+        subtask.day = (targetDay === 'ongoing') ? 'unscheduled' : targetDay;
+        parentTask.lastUpdated = new Date().toISOString();
+        fetch(`/tasks/${parentId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ subtasks: parentTask.subtasks, lastUpdated: parentTask.lastUpdated }),
+        }).catch(() => {});
+        saveTasks();
+        renderBoard();
+        return;
+      }
+
       const task = tasks.find(t => t.id === id);
       if (!task) return;
       if (targetDay === 'ongoing') {
@@ -1507,6 +1558,15 @@
       saveTasks();
       renderBoard();
     });
+
+    // Drag to reschedule — encoded so drop zones can distinguish from top-level tasks
+    card.draggable = true;
+    card.addEventListener('dragstart', e => {
+      e.dataTransfer.setData('text/plain', `subtask:${parentTask.id}:${subtask.id}`);
+      e.dataTransfer.effectAllowed = 'move';
+      setTimeout(() => card.classList.add('dragging'), 0);
+    });
+    card.addEventListener('dragend', () => card.classList.remove('dragging'));
 
     card.addEventListener('click', () => openModal(parentTask));
     return card;
@@ -1955,7 +2015,7 @@
     // Rollover undo — restore tasks to their original days
     if (_rolloverUndo) {
       clearTimeout(_undoTimer);
-      const { originals } = _rolloverUndo;
+      const { originals, subtaskOriginals } = _rolloverUndo;
       _rolloverUndo = null;
       hideUndoToast();
       const now = new Date().toISOString();
@@ -1966,6 +2026,22 @@
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ day, lastUpdated: now }),
+        }).catch(() => {});
+      });
+      // Restore subtask days
+      const parentsToUpdate = new Map();
+      (subtaskOriginals || []).forEach(({ parentId, subtaskId, day }) => {
+        const parentTask = tasks.find(t => t.id === parentId);
+        if (!parentTask) return;
+        const st = (parentTask.subtasks || []).find(s => s.id === subtaskId);
+        if (st) { st.day = day; parentsToUpdate.set(parentId, parentTask); }
+      });
+      parentsToUpdate.forEach((parentTask, parentId) => {
+        parentTask.lastUpdated = now;
+        fetch(`/tasks/${parentId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ subtasks: parentTask.subtasks, lastUpdated: now }),
         }).catch(() => {});
       });
       localStorage.removeItem(ROLLOVER_DATE_KEY); // allow re-roll on next load
