@@ -1428,6 +1428,8 @@
 
     card.addEventListener('dragover', e => {
       e.preventDefault();
+      // Don't show reorder hints for subtask drags — they target the column, not a card slot
+      if (e.dataTransfer.types.includes('application/subtask')) return;
       const rect = card.getBoundingClientRect();
       const pos = e.clientY < rect.top + rect.height / 2 ? 'before' : 'after';
       card.classList.toggle('drop-before', pos === 'before');
@@ -1440,11 +1442,15 @@
     });
     card.addEventListener('drop', e => {
       e.preventDefault();
-      e.stopPropagation();
-      const insertBefore = card.classList.contains('drop-before');
       card.classList.remove('drop-before', 'drop-after');
 
       const draggedId = e.dataTransfer.getData('text/plain');
+      // Subtask drags use encoded IDs — let them bubble to the column drop zone
+      if (draggedId.startsWith('subtask:')) return;
+
+      e.stopPropagation();
+      const insertBefore = card.classList.contains('drop-before');
+
       if (draggedId === task.id) return;
 
       const draggedTask = tasks.find(t => t.id === draggedId);
@@ -1592,6 +1598,7 @@
     card.draggable = true;
     card.addEventListener('dragstart', e => {
       e.dataTransfer.setData('text/plain', `subtask:${parentTask.id}:${subtask.id}`);
+      e.dataTransfer.setData('application/subtask', '1'); // detectable during dragover
       e.dataTransfer.effectAllowed = 'move';
       setTimeout(() => card.classList.add('dragging'), 0);
     });
