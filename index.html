@@ -1357,9 +1357,8 @@
   }
 
   function renderBoard() {
-    renderOngoingBand();
-
     const projectColors = buildProjectColorMap();
+    renderOngoingBand(projectColors);
     const board = document.getElementById('board');
     board.innerHTML = '';
     const dates = getDisplayDays(weekOffset);
@@ -1494,7 +1493,7 @@
     updateWeekLabel();
   }
 
-  function renderOngoingBand() {
+  function renderOngoingBand(projectColors = new Map()) {
     // Only top-level project cards — tasks with a parentId are shown inside their parent
     const ongoing = tasks.filter(t => t.ongoing && !t.parentId);
     const band = document.getElementById('ongoingBand');
@@ -1506,7 +1505,7 @@
     const pending = ongoing.filter(t => !t.done).length;
     countEl.textContent = `${pending} active`;
     cardsEl.innerHTML = '';
-    ongoing.forEach(t => cardsEl.appendChild(makeOngoingCard(t)));
+    ongoing.forEach(t => cardsEl.appendChild(makeOngoingCard(t, projectColors.get(t.id))));
     addDropZone(cardsEl, 'ongoing');
   }
 
@@ -1633,10 +1632,14 @@
     return card;
   }
 
-  function makeOngoingCard(task) {
+  function makeOngoingCard(task, color) {
     const card = document.createElement('div');
     card.className = 'ongoing-card' + (task.done ? ' done' : '');
     card.dataset.status = task.status || 'todo';
+    if (color) {
+      card.style.borderColor = color;
+      card.style.background = `color-mix(in srgb, ${color} 8%, var(--surface2))`;
+    }
 
     const { meta, extra } = buildMetaParts(task, true);
 
@@ -1648,10 +1651,11 @@
       ? children.filter(c => c.done || c.status === 'done').length
       : subs.filter(s => s.done).length;
 
+    const barColor = color || 'var(--accent)';
     const progressHtml = progressItems.length
       ? `<div class="project-progress${doneItems === progressItems.length ? ' all-done' : ''}">
-           <span class="progress-bar-wrap"><span class="progress-bar-fill" style="width:${Math.round(doneItems/progressItems.length*100)}%"></span></span>
-           <span class="progress-label">${doneItems}/${progressItems.length} done</span>
+           <span class="progress-bar-wrap"><span class="progress-bar-fill" style="width:${Math.round(doneItems/progressItems.length*100)}%;background:${barColor}"></span></span>
+           <span class="progress-label" style="color:${barColor}">${doneItems}/${progressItems.length} done</span>
          </div>`
       : '';
 
