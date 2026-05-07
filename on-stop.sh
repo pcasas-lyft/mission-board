@@ -2,10 +2,9 @@
 # Stop hook — runs every time a Claude Code agent session ends.
 #
 # Flow:
-#   1. If the linked task is still in-progress, block the stop ONCE and
-#      ask the agent to update it (stop-check.py emits a block decision).
-#   2. Otherwise: archive old done tasks, regenerate docs, clear stale
-#      claim, send Mac notification.
+#   1. If any linked task is still in-progress, block the stop ONCE and
+#      ask the agent to log progress via the todo-tracker MCP tools.
+#   2. Otherwise: archive old done tasks, regenerate docs, send notification.
 
 DIR="$(dirname "$0")"
 BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
@@ -22,11 +21,7 @@ python3 "$DIR/archive-tasks.py"  2>/dev/null
 python3 "$DIR/gen-status.py"     2>/dev/null
 python3 "$DIR/gen-donelog.py"    2>/dev/null
 
-# ── 3. Clear stale claim for this branch ────────────────────────────────────
-# (WorktreeRemove also does this, but not all sessions use worktrees)
-echo '{}' | python3 "$DIR/auto-unclaim-task.py" 2>/dev/null
-
-# ── 4. Send notification ─────────────────────────────────────────────────────
+# ── 3. Send notification ─────────────────────────────────────────────────────
 SAFE_BRANCH="${BRANCH//\//-}"
 TASK_ID_FILE="${TMPDIR:-/tmp}/claude-task-${SAFE_BRANCH}.id"
 NOTIF=$(python3 "$DIR/notif-summary.py" "$DIR/tasks.json" "$BRANCH" "$TASK_ID_FILE" 2>/dev/null)

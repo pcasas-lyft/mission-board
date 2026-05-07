@@ -60,22 +60,23 @@ def main():
 
     task_word = 'task' if len(pending) == 1 else 'tasks'
     titles = ', '.join(f'"{t["title"]}"' for t in pending)
-    updates = []
+    task_lines = []
     for t in pending:
-        updates.append(
-            f'# {t["title"]} (id: {t["id"]})\n'
-            f'update_task(id="{t["id"]}", status="in-review",\n'
-            f'  notes="Done: ...\\nNext: ...",\n'
-            f'  pr_links=[{{"url":"<PR URL>","label":"<repo #N>"}}])'
+        task_lines.append(
+            f'• "{t["title"]}" (id: {t["id"]})\n'
+            f'  → Use the todo-tracker MCP tool: update_task\n'
+            f'    id="{t["id"]}", status="in-review",\n'
+            f'    notes="Done: <what you did>\\nNext: <next step>",\n'
+            f'    pr_links=[{{"url":"<PR>","label":"<repo #N>"}}]'
         )
 
     print(json.dumps({
         'decision': 'block',
         'reason': (
-            f'{len(pending)} {task_word} still in-progress: {titles}\n\n'
-            f'Log your progress before finishing:\n\n'
-            + '\n\n'.join(updates)
-            + '\n\nIf work is ongoing, update notes with current state — another agent may continue.'
+            f'Please log progress on {len(pending)} {task_word} before finishing:\n\n'
+            + '\n\n'.join(task_lines)
+            + '\n\nCall update_task via the todo-tracker MCP server for each task above.'
+            + '\nIf work is ongoing, leave notes so the next agent has full context.'
         ),
     }))
 
