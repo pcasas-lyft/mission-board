@@ -716,13 +716,15 @@
     .proj-panel-badge {
       font-size: 10px; padding: 2px 7px; border-radius: 10px;
       border: 1px solid var(--border); color: var(--text-muted);
-      background: var(--surface2);
+      background: var(--surface2); text-decoration: none; display: inline-flex; align-items: center;
     }
+    a.proj-panel-badge:hover { text-decoration: underline; opacity: 0.85; }
     .proj-panel-badge.day { color: var(--blue); border-color: var(--blue); }
     .proj-panel-badge.status-in-progress { color: var(--yellow); border-color: var(--yellow); }
     .proj-panel-badge.status-in-review   { color: var(--mauve); border-color: var(--mauve); }
     .proj-panel-badge.status-blocked     { color: var(--red);   border-color: var(--red); }
     .proj-panel-badge.jira               { color: var(--blue); border-color: var(--blue); }
+    .proj-panel-badge.pr                 { color: var(--green); border-color: var(--green); }
     .proj-panel-task-notes { font-size: 11px; color: var(--text-muted); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .proj-panel-footer {
       padding: 14px 20px; border-top: 1px solid var(--border); flex-shrink: 0;
@@ -2713,8 +2715,8 @@
             <div class="proj-panel-task-title">${escHtml(child.title)}</div>
             <div class="proj-panel-task-badges">
               ${dayLabel ? `<span class="proj-panel-badge day">📅 ${dayLabel}</span>` : ''}
-              ${child.jiraKey ? `<span class="proj-panel-badge jira">${escHtml(child.jiraKey)}</span>` : ''}
-              ${child.prLinks && child.prLinks.length ? child.prLinks.map(p => `<span class="proj-panel-badge">🔗 ${escHtml(p.label || 'PR')}</span>`).join('') : ''}
+              ${child.jiraKey ? (() => { const jiraBase = /^https?:\/\//i.test(window._jiraBaseUrl||'') ? window._jiraBaseUrl : ''; return jiraBase ? `<a class="proj-panel-badge jira" href="${escHtml(jiraBase)}/browse/${escHtml(child.jiraKey)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${escHtml(child.jiraKey)}</a>` : `<span class="proj-panel-badge jira">${escHtml(child.jiraKey)}</span>`; })() : ''}
+              ${child.prLinks && child.prLinks.length ? child.prLinks.map(p => `<a class="proj-panel-badge pr" href="${escHtml(p.url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">🔗 ${escHtml(p.label || 'PR')}</a>`).join('') : (child.prLink ? `<a class="proj-panel-badge pr" href="${escHtml(child.prLink)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">🔗 PR</a>` : '')}
             </div>
             ${notesSnippet ? `<div class="proj-panel-task-notes">${escHtml(notesSnippet)}</div>` : ''}
           </div>`;
