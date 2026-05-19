@@ -73,11 +73,9 @@ def main():
     task_id = extract_task_id(branch)
     task = next((t for t in tasks if t.get('id') == task_id), None)
 
-    # Strategy 2: already claimed (no-op path — still re-patch to refresh timestamp)
-    if not task:
-        task = next((t for t in tasks if t.get('claimedBy') == branch), None)
-
-    # Strategy 3: slug match for user-prefixed branches (alice/*, bob/*, etc.)
+    # Strategy 2: slug match for user-prefixed branches (alice/*, bob/*, etc.)
+    # NOTE: claimedBy lookup intentionally removed — claimedBy is no longer a lock
+    # and stale values caused wrong tasks to be injected into unrelated sessions.
     if not task:
         task = find_task_by_slug(tasks, branch)
 
