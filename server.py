@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-import json, os, re, threading, queue, subprocess, getpass, uuid
+import json, os, re, threading, queue, subprocess, getpass, uuid, shutil, tempfile
+from datetime import datetime, timezone
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from socketserver import ThreadingMixIn
 
@@ -9,8 +10,50 @@ JIRA_CONFIG_FILE  = os.path.join(INSTALL_DIR, 'jira-config.json')
 JIRA_DEFAULT_URL  = ''
 SPECS_DIR         = os.path.normpath(os.path.join(INSTALL_DIR, '..', 'specs'))
 ARCHIVE_FILE      = os.path.join(INSTALL_DIR, 'tasks-archive.json')
+BACKUP_DIR        = os.path.join(INSTALL_DIR, 'backups')
+MAX_BACKUPS       = 10
 
-# SSE: list of per-client queues
+# ── Backup + atomic write helpers ──────────────────────────────────────────────
+
+def _rotate_backups():
+    """Copy current tasks.json into backups/, keeping only the last MAX_BACKUPS."""
+    if not os.path.exists(TASKS_FILE):
+        return
+    os.makedirs(BACKUP_DIR, exist_ok=True)
+    ts = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')
+    shutil.copy2(TASKS_FILE, os.path.join(BACKUP_DIR, f'tasks.{ts}.json'))
+    # Prune oldest beyond the limit
+    try:
+        entries = sorted(
+            f for f in os.listdir(BACKUP_DIR)
+            if f.startswith('tasks.') and f.endswith('.json')
+        )
+        for old in entries[:-MAX_BACKUPS]:
+            os.remove(os.path.join(BACKUP_DIR, old))
+    except Exception:
+        pass
+
+
+def _atomic_write_tasks(tasks):
+    """
+    Backup current file, then write tasks atomically via a temp-file rename.
+    Must be called while _file_lock is held.
+    """
+    _rotate_backups()
+    tmp_fd, tmp_path = tempfile.mkstemp(dir=INSTALL_DIR, suffix='.tmp')
+    try:
+        with os.fdopen(tmp_fd, 'w') as f:
+            json.dump(tasks, f)
+        os.replace(tmp_path, TASKS_FILE)
+    except Exception:
+        try:
+            os.unlink(tmp_path)
+        except Exception:
+            pass
+        raise
+
+
+# ── SSE: list of per-client queues
 _clients = []
 _clients_lock = threading.Lock()
 
@@ -156,6 +199,28 @@ class Handler(SimpleHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(json.dumps({'error': str(e)}).encode())
 
+        elif self.path == '/backups':
+            # List available backup snapshots, newest first
+            files = []
+            if os.path.isdir(BACKUP_DIR):
+                files = sorted(
+                    (f for f in os.listdir(BACKUP_DIR) if f.startswith('tasks.') and f.endswith('.json')),
+                    reverse=True,
+                )
+            resp = json.dumps([
+                {
+                    'file': f,
+                    'ts': f[len('tasks.'):-len('.json')],
+                    'size': os.path.getsize(os.path.join(BACKUP_DIR, f)),
+                }
+                for f in files
+            ]).encode()
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self._cors()
+            self.end_headers()
+            self.wfile.write(resp)
+
         elif self.path == '/archive':
             data = b'[]'
             with _file_lock:
@@ -278,8 +343,7 @@ class Handler(SimpleHTTPRequestHandler):
                     self.send_header('Content-Type', 'application/json')
                     self._cors(); self.end_headers()
                     self.wfile.write(b'{"error":"task not found"}'); return
-                with open(TASKS_FILE, 'w') as f:
-                    json.dump(tasks, f)
+                _atomic_write_tasks(tasks)
 
             broadcast('update')
             regen_docs_async()
@@ -329,8 +393,7 @@ class Handler(SimpleHTTPRequestHandler):
                     self.wfile.write(b'{"error":"task not found"}')
                     return
 
-                with open(TASKS_FILE, 'w') as f:
-                    json.dump(tasks, f)
+                _atomic_write_tasks(tasks)
 
             broadcast('update')
             regen_docs_async()
@@ -436,6 +499,59 @@ class Handler(SimpleHTTPRequestHandler):
             self.wfile.write(resp.encode())
             return
 
+        # POST /tasks/restore?file=tasks.20260521T123456.json — restore from a backup
+        if self.path.startswith('/tasks/restore'):
+            from urllib.parse import urlparse, parse_qs
+            qs = parse_qs(urlparse(self.path).query)
+            files_param = qs.get('file', [])
+            # Default to latest backup if no file specified
+            if not files_param:
+                if not os.path.isdir(BACKUP_DIR):
+                    self.send_response(404); self._cors(); self.end_headers()
+                    self.wfile.write(b'{"error":"no backups found"}'); return
+                candidates = sorted(
+                    f for f in os.listdir(BACKUP_DIR)
+                    if f.startswith('tasks.') and f.endswith('.json')
+                )
+                if not candidates:
+                    self.send_response(404); self._cors(); self.end_headers()
+                    self.wfile.write(b'{"error":"no backups found"}'); return
+                filename = candidates[-1]
+            else:
+                filename = files_param[0]
+
+            # Safety: only allow our own backup filenames
+            if not re.match(r'^tasks\.\d{8}T\d{6}\.json$', filename):
+                self.send_response(400); self._cors(); self.end_headers()
+                self.wfile.write(b'{"error":"invalid backup filename"}'); return
+
+            backup_path = os.path.join(BACKUP_DIR, filename)
+            if not os.path.isfile(backup_path):
+                self.send_response(404); self._cors(); self.end_headers()
+                self.wfile.write(b'{"error":"backup file not found"}'); return
+
+            try:
+                with open(backup_path) as f:
+                    restored = json.load(f)
+            except Exception as e:
+                self.send_response(500); self._cors(); self.end_headers()
+                self.wfile.write(json.dumps({'error': str(e)}).encode()); return
+
+            with _file_lock:
+                _atomic_write_tasks(restored)
+
+            broadcast('update')
+            regen_docs_async()
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self._cors(); self.end_headers()
+            self.wfile.write(json.dumps({
+                'ok': True,
+                'restored': len(restored),
+                'from': filename,
+            }).encode())
+            return
+
         # POST /tasks/new — append a single new task atomically
         if self.path == '/tasks/new':
             length = int(self.headers.get('Content-Length') or 0)
@@ -484,8 +600,7 @@ class Handler(SimpleHTTPRequestHandler):
                     with open(TASKS_FILE, 'r') as f:
                         tasks = json.load(f)
                 tasks.append(new_task)
-                with open(TASKS_FILE, 'w') as f:
-                    json.dump(tasks, f)
+                _atomic_write_tasks(tasks)
 
             broadcast('update')
             regen_docs_async()
@@ -496,13 +611,14 @@ class Handler(SimpleHTTPRequestHandler):
             self.wfile.write(json.dumps({'ok': True, 'id': new_task['id']}).encode())
             return
 
-        if self.path == '/tasks':
+        if self.path in ('/tasks', '/tasks?force=true'):
+            force = 'force=true' in self.path
             length = int(self.headers.get('Content-Length') or 0)
             body = self.rfile.read(length)
 
             # Validate JSON before touching the file
             try:
-                json.loads(body)
+                incoming = json.loads(body)
             except json.JSONDecodeError:
                 self.send_response(400)
                 self.send_header('Content-Type', 'application/json')
@@ -511,9 +627,41 @@ class Handler(SimpleHTTPRequestHandler):
                 self.wfile.write(b'{"error":"invalid JSON"}')
                 return
 
+            if not isinstance(incoming, list):
+                self.send_response(400)
+                self.send_header('Content-Type', 'application/json')
+                self._cors()
+                self.end_headers()
+                self.wfile.write(b'{"error":"tasks must be an array"}')
+                return
+
             with _file_lock:
-                with open(TASKS_FILE, 'wb') as f:
-                    f.write(body)
+                # ── Destruction guard ──────────────────────────────────────
+                # Refuse if the new list would delete >50% of existing tasks.
+                # Require ?force=true to override (e.g. deliberate bulk reset).
+                existing = []
+                if os.path.exists(TASKS_FILE):
+                    try:
+                        with open(TASKS_FILE) as f:
+                            existing = json.load(f)
+                    except Exception:
+                        pass
+
+                if not force and len(existing) >= 3 and len(incoming) < len(existing) * 0.5:
+                    self.send_response(409)
+                    self.send_header('Content-Type', 'application/json')
+                    self._cors()
+                    self.end_headers()
+                    self.wfile.write(json.dumps({
+                        'error': (
+                            f'Destruction guard: refusing to replace {len(existing)} tasks '
+                            f'with only {len(incoming)}. Add ?force=true to override.'
+                        )
+                    }).encode())
+                    return
+
+                _atomic_write_tasks(incoming)
+
             broadcast('update')
             regen_docs_async()
             self.send_response(200)
@@ -549,8 +697,7 @@ class Handler(SimpleHTTPRequestHandler):
                     self.wfile.write(b'{"error":"task not found"}')
                     return
 
-                with open(TASKS_FILE, 'w') as f:
-                    json.dump(tasks, f)
+                _atomic_write_tasks(tasks)
 
             broadcast('update')
             regen_docs_async()

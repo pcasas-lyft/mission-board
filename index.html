@@ -928,6 +928,7 @@
   <div style="display:flex;align-items:center;gap:10px;">
     <div class="sync-dot" id="syncDot" title="Sync status"></div>
     <button class="update-btn" id="updateBtn" title="Pull latest updates from GitHub">↑</button>
+    <button class="update-btn" id="backupBtn" title="Restore from backup">🗄</button>
     <button class="jira-config-btn" id="jiraConfigBtn" title="Jira settings">
       <span class="jira-dot" id="jiraDot"></span>Jira
     </button>
@@ -944,6 +945,23 @@
     <div class="update-actions">
       <button class="btn-cancel" id="updateRestartBtn" style="display:none">Restart Server</button>
       <button class="btn-cancel" id="updateCloseBtn">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Backup / Restore Modal -->
+<div class="list-overlay" id="backupOverlay">
+  <div class="list-modal" style="width:460px">
+    <div class="list-modal-header">
+      <h2>🗄 Restore from Backup</h2>
+      <button class="spec-panel-close" id="backupClose">✕</button>
+    </div>
+    <div style="padding:12px 20px 4px;font-size:12px;color:var(--text-muted)">
+      Backups are saved automatically before every write. Select one to restore.
+    </div>
+    <div class="list-modal-body" id="backupList"></div>
+    <div style="padding:10px 20px 16px;font-size:11px;color:var(--text-muted);border-top:1px solid var(--border);margin-top:4px">
+      Restoring will overwrite your current tasks — current state is backed up first.
     </div>
   </div>
 </div>
@@ -2932,6 +2950,58 @@
 
   updateCloseBtn.addEventListener('click', () => updateOverlay.classList.remove('open'));
   updateOverlay.addEventListener('click', e => { if (e.target === updateOverlay) updateOverlay.classList.remove('open'); });
+
+  // ── Backup / Restore ────────────────────────────────────────
+  const backupOverlay = document.getElementById('backupOverlay');
+  document.getElementById('backupBtn').addEventListener('click', async () => {
+    const list = document.getElementById('backupList');
+    list.innerHTML = '<div style="padding:20px;color:var(--text-muted)">Loading…</div>';
+    backupOverlay.classList.add('open');
+    try {
+      const backups = await fetch('/backups').then(r => r.json());
+      if (!backups.length) {
+        list.innerHTML = '<div style="padding:20px;color:var(--text-muted)">No backups yet — they are created automatically on the next save.</div>';
+        return;
+      }
+      list.innerHTML = backups.map(b => {
+        const ts = b.ts; // 20260521T123456
+        const d = ts.length >= 15
+          ? new Date(`${ts.slice(0,4)}-${ts.slice(4,6)}-${ts.slice(6,8)}T${ts.slice(9,11)}:${ts.slice(11,13)}:${ts.slice(13,15)}Z`)
+          : null;
+        const label = d && !isNaN(d)
+          ? d.toLocaleString('en-US', { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' })
+          : ts;
+        const kb = (b.size / 1024).toFixed(1);
+        return `<div class="list-item" data-file="${escHtml(b.file)}">
+          <span class="list-item-icon">📄</span>
+          <span class="list-item-name">${label}</span>
+          <span class="list-item-meta">${kb} KB</span>
+        </div>`;
+      }).join('');
+      list.querySelectorAll('.list-item').forEach(el => {
+        el.addEventListener('click', async () => {
+          if (!confirm(`Restore backup from ${el.querySelector('.list-item-name').textContent}?\n\nYour current tasks will be replaced (but backed up first).`)) return;
+          backupOverlay.classList.remove('open');
+          setSyncState('saving');
+          try {
+            const res = await fetch(`/tasks/restore?file=${encodeURIComponent(el.dataset.file)}`, { method: 'POST' });
+            const data = await res.json();
+            if (!res.ok) { alert('Restore failed: ' + (data.error || res.status)); setSyncState('error'); return; }
+            setSyncState('saved');
+            await loadTasks();
+            showUndoToast(`✓ Restored ${data.restored} tasks from backup`);
+          } catch (e) {
+            alert('Restore failed: ' + e);
+            setSyncState('error');
+          }
+        });
+      });
+    } catch (e) {
+      list.innerHTML = `<div style="padding:20px;color:var(--red)">Error: ${escHtml(e.message)}</div>`;
+    }
+  });
+  document.getElementById('backupClose').addEventListener('click', () => backupOverlay.classList.remove('open'));
+  backupOverlay.addEventListener('click', e => { if (e.target === backupOverlay) backupOverlay.classList.remove('open'); });
 
   // ── Specs list ──────────────────────────────────────────────
   const specsOverlay = document.getElementById('specsOverlay');
