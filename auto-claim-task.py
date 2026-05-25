@@ -82,6 +82,12 @@ def main():
     if not task:
         sys.exit(0)
 
+    # Don't claim tasks that are already finished — they belong to a previous
+    # session. Re-claiming them would cause spurious notifications and stop-blocks
+    # in future unrelated sessions that happen to be on the same branch.
+    if task.get('status') in ('in-review', 'done'):
+        sys.exit(0)
+
     task_id = task.get('id')
 
     # Don't lock — multiple agents can work on the same task.

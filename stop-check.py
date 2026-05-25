@@ -31,19 +31,27 @@ def get_branch_fallback():
 
 
 def main():
-    branch = sys.argv[1] if len(sys.argv) > 1 else ''
+    # Accept multiple branches (one per argv) — collect task IDs across all of them.
+    branches = [b for b in sys.argv[1:] if b and b not in ('HEAD', 'main', 'master')]
 
-    # Fallback: detect branch via git if not passed or empty
-    if not branch or branch in ('HEAD',):
+    if not branches:
         branch = get_branch_fallback()
+        if branch and branch not in ('HEAD', 'main', 'master', ''):
+            branches = [branch]
 
-    if not branch or branch in ('HEAD', 'main', 'master', ''):
+    if not branches:
         return
 
-    task_ids = read_session_tasks(branch)
+    task_ids = []
+    for branch in branches:
+        task_ids.extend(read_session_tasks(branch))
+    task_ids = list(dict.fromkeys(task_ids))  # deduplicate, preserve order
+
     if not task_ids:
         return
 
+    # Flag file: use the first branch as the key (consistent across calls)
+    branch = branches[0]
     # Flag file: block once, then let through on second attempt
     flag = session_task_file(branch) + '.stop-reminded'
     if os.path.exists(flag):

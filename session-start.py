@@ -3,46 +3,75 @@
 SessionStart hook — injects live work status into every agent session.
 
 1. Reads WORKSTATUS.md and includes it as the systemMessage.
-2. Auto-claims the task for the current branch (non-main branches).
-3. If already on a task branch, highlights the session tasks explicitly.
-4. If on main, lists all active worktrees so the agent can work via
-   absolute paths and proactively match the user's prompt to a task.
+2. Scans ALL git repos under ~/src/ for active branches and auto-claims
+   matching tasks (not just the CWD branch — sessions span multiple repos).
+3. Highlights all session tasks across all repos.
+4. If on main in all repos, lists active worktrees for context.
 """
-import json, os, sys, subprocess, urllib.request, glob
+import json, os, sys, subprocess, urllib.request, glob, tempfile
 
 INSTALL_DIR = os.path.dirname(os.path.abspath(__file__))
 STATUS_FILE = os.path.normpath(os.path.join(INSTALL_DIR, '..', 'WORKSTATUS.md'))
 BASE_URL = 'http://localhost:3456'
+SRC_DIR = os.path.expanduser('~/src')
 
 sys.path.insert(0, INSTALL_DIR)
-from lib import read_session_tasks, session_task_file
+from lib import read_session_tasks, session_task_file, write_session_tasks
 
 
-def get_branch():
+def get_all_branches():
+    """
+    Return all active non-main branches across every git repo in ~/src/.
+    Sessions routinely span multiple repos (e.g. instant-android + membershipsapi),
+    so restricting to the CWD branch misses most of the real work.
+    Returns a deduplicated list, CWD branch first if present.
+    """
+    branches = {}  # branch → repo path (first seen wins for dedup)
+
+    # CWD branch first for backward-compat (stop hook flag files use CWD branch)
     try:
         r = subprocess.run(
             ['git', 'rev-parse', '--abbrev-ref', 'HEAD'],
             capture_output=True, text=True, timeout=5,
         )
         if r.returncode == 0:
-            return r.stdout.strip()
+            b = r.stdout.strip()
+            if b and b not in ('HEAD', 'main', 'master'):
+                branches[b] = '.'
     except Exception:
         pass
-    return ''
+
+    # All repos under ~/src/
+    if os.path.isdir(SRC_DIR):
+        for entry in os.scandir(SRC_DIR):
+            if not entry.is_dir():
+                continue
+            try:
+                r = subprocess.run(
+                    ['git', '-C', entry.path, 'rev-parse', '--abbrev-ref', 'HEAD'],
+                    capture_output=True, text=True, timeout=3,
+                )
+                b = r.stdout.strip()
+                if b and b not in ('HEAD', 'main', 'master') and r.returncode == 0:
+                    branches.setdefault(b, entry.path)
+            except Exception:
+                pass
+
+    return list(branches.keys())
 
 
-def try_auto_claim(branch):
-    if not branch or branch in ('HEAD', 'main', 'master'):
-        return
+def auto_claim_all(branches):
+    """Run auto-claim for every branch found across all repos."""
     script = os.path.join(INSTALL_DIR, 'auto-claim-task.py')
-    try:
-        subprocess.run(
-            ['python3', script],
-            input='{}',
-            capture_output=True, text=True, timeout=8,
-        )
-    except Exception:
-        pass
+    for branch in branches:
+        try:
+            subprocess.run(
+                ['python3', script],
+                input=json.dumps({'branch': branch}),
+                capture_output=True, text=True, timeout=8,
+            )
+        except Exception:
+            pass
 
 
 def load_status():
@@ -76,12 +105,23 @@ def get_worktrees():
                 if path and branch and branch not in ('main', 'master'):
                     worktrees[branch] = path
                 path = branch = None
-        # catch last block if no trailing newline
         if path and branch and branch not in ('main', 'master'):
             worktrees[branch] = path
         return worktrees
     except Exception:
         return {}
+
+
+def collect_session_task_ids(branches):
+    """Aggregate task IDs from session files across all active branches."""
+    seen = set()
+    task_ids = []
+    for branch in branches:
+        for tid in read_session_tasks(branch):
+            if tid not in seen:
+                seen.add(tid)
+                task_ids.append(tid)
+    return task_ids
 
 
 def load_session_context(task_ids, worktrees):
@@ -121,7 +161,6 @@ def load_worktree_context(worktrees):
     """
     When on main: list all active worktrees cross-referenced with tasks.
     Uses session task files (not claimedBy) to match branches to tasks.
-    This lets the agent work via absolute paths without needing to cd.
     """
     if not worktrees:
         return ''
@@ -133,7 +172,6 @@ def load_worktree_context(worktrees):
 
     lines = ['━━━ ACTIVE WORKTREES (you are on main) ━━━']
     for branch, path in worktrees.items():
-        # Look up tasks via session task file — claimedBy is no longer used as a lock
         branch_task_ids = read_session_tasks(branch)
         branch_tasks = [t for t in tasks if t.get('id') in branch_task_ids]
 
@@ -145,7 +183,6 @@ def load_worktree_context(worktrees):
                 lines.append(f'  branch: {branch}')
                 lines.append(f'  path:   {path}')
         else:
-            # Fallback: show worktree even without a known task
             lines.append(f'• {branch}  →  {path}  (no linked task)')
 
     if len(lines) == 1:
@@ -153,15 +190,43 @@ def load_worktree_context(worktrees):
     return '\n'.join(lines)
 
 
-def main():
-    branch = get_branch()
-    try_auto_claim(branch)
+def prune_stale_session_files():
+    """
+    Clear session task files whose tasks are all fully done.
+    Only prunes 'done' — not 'in-review', because in-review tasks should
+    still trigger a notification when the session ends.
+    """
+    try:
+        with urllib.request.urlopen(f'{BASE_URL}/tasks', timeout=3) as r:
+            tasks = {t['id']: t for t in json.loads(r.read())}
+    except Exception:
+        return
 
-    on_main = branch in ('main', 'master', '')
+    pattern = os.path.join(tempfile.gettempdir(), 'claude-task-*.id')
+    for path in glob.glob(pattern):
+        try:
+            content = open(path).read().strip()
+            if not content:
+                os.remove(path)
+                continue
+            ids = json.loads(content) if content.startswith('[') else [content]
+            if ids and all(tasks.get(tid, {}).get('status') == 'done' for tid in ids):
+                os.remove(path)
+        except Exception:
+            pass
+
+
+def main():
+    branches = get_all_branches()
+    prune_stale_session_files()
+    auto_claim_all(branches)
+
+    # on_main = no non-main branches found anywhere
+    on_main = len(branches) == 0
     worktrees = get_worktrees()
 
     status = load_status()
-    task_ids = read_session_tasks(branch)
+    task_ids = collect_session_task_ids(branches)
     session_ctx = load_session_context(task_ids, worktrees)
     worktree_ctx = load_worktree_context(worktrees) if on_main else ''
 
